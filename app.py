@@ -79,7 +79,6 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Main page: white background, dark text */
     .stApp {
         background-color: #ffffff;
         color: #111827;
@@ -158,7 +157,7 @@ st.markdown("""
         color: #f9fafb;
     }
 </style>
-""", unsafe_allow_html=True)  # white main, violet sidebar [web:322][web:219][web:301]
+""", unsafe_allow_html=True)
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -552,7 +551,7 @@ def analyze_multiple_stocks(tickers: List[str], period_type: str, max_results: i
             out.append(res)
     bar.empty()
     txt.empty()
-    return sorted(out, key=lambda x: x['score'], reverse=True)[:max_results]
+    return sorted(out, key=lambda x: x['score'], ascending=False)[:max_results]
 
 def run_analysis():
     now = datetime.now(IST)
@@ -561,12 +560,12 @@ def run_analysis():
     for p in ['BTST', 'Intraday', 'Weekly', 'Monthly']:
         st.session_state['recommendations'][p] = analyze_multiple_stocks(STOCK_UNIVERSE, p, max_results=20)
 
-# ========= BACKGROUND AUTO SCAN (20 MIN, MARKET HOURS) =========
+# ========= BACKGROUND AUTO SCAN =========
 def market_hours_window():
     now = datetime.now(IST)
     start = now.replace(hour=9, minute=10, second=0, microsecond=0)
     end = now.replace(hour=15, minute=40, second=0, microsecond=0)
-    return start <= now <= end  # 9:10–15:40 envelope [web:308][web:313]
+    return start <= now <= end
 
 def maybe_run_auto_scan():
     now = datetime.now(IST)
@@ -608,22 +607,28 @@ def get_top_stocks(limit: int = 10):
         return []
     return pd.DataFrame(unique_rows).to_dict(orient="records")
 
-# ========= SIDEBAR: BTST FLASH CARDS (NO REPEAT) =========
-def get_btst_top_for_sidebar(n: int = 5):
-    btst_recs = st.session_state['recommendations'].get('BTST', [])
-    if not btst_recs:
-        return []
-    df = pd.DataFrame(btst_recs).sort_values("score", ascending=False)
-    seen = set()
-    rows = []
-    for _, r in df.iterrows():
-        t = r.get('ticker')
-        if t not in seen:
-            seen.add(t)
-            rows.append(r)
-        if len(rows) >= n:
-            break
-    return pd.DataFrame(rows).to_dict(orient="records")
+# ========= SIDEBAR NAVIGATION =========
+PAGES = [
+    "🔥 Top Stocks",
+    "🌙 BTST",
+    "⚡ Intraday",
+    "📆 Weekly",
+    "📅 Monthly",
+    "📊 GROWW Stocks",
+    "⚙️ Configuration",
+]
+
+def sidebar_nav():
+    with st.sidebar:
+        st.markdown("<div class='side-section'><h4>📂 Navigation</h4>", unsafe_allow_html=True)
+        page = st.radio(
+            "Go to",
+            PAGES,
+            index=0,
+            label_visibility="collapsed",
+        )  # navigation panel [web:312]
+        st.markdown("</div>", unsafe_allow_html=True)
+    return page
 
 # ========= GROWW PORTFOLIO ANALYSIS =========
 def analyze_groww_portfolio(df: pd.DataFrame):
@@ -664,23 +669,37 @@ def analyze_groww_portfolio(df: pd.DataFrame):
         "top_holdings": top,
     }
 
-# ========= TABLE HELPERS: ADD TARGET / PROFIT% & HIDE INDEX =========
-def add_targets_to_df(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty:
-        return df
-    df2 = df.copy()
-    if "price" in df2.columns and "target_1" in df2.columns:
-        df2["Target Price"] = df2["target_1"]
-        # profit % = (target - cmp) / cmp * 100 [web:321][web:324]
-        df2["Profit %"] = ((df2["target_1"] - df2["price"]) / df2["price"]) * 100
-    return df2
-
-def show_reco_table(df: pd.DataFrame):
-    if df is None or df.empty:
+# ========= FLASH CARD RENDER =========
+def render_reco_cards(recs: List[Dict], label: str):
+    if not recs:
+        st.info(f"Run Full Scan to generate {label} recommendations.")
         return
-    df2 = add_targets_to_df(df)
-    # hide index via dataframe index parameter (v1.25+) [web:318][web:317]
-    st.dataframe(df2, use_container_width=True, hide_index=True)
+    # Limit to 10
+    df = pd.DataFrame(recs).sort_values("score", ascending=False).head(10)
+    for _, rec in df.iterrows():
+        cmp_ = rec.get('price', 0.0)
+        tgt = rec.get('target_1', np.nan)
+        diff = tgt - cmp_ if tgt is not None and not np.isnan(tgt) else np.nan
+        profit_pct = (diff / cmp_ * 100) if cmp_ and not np.isnan(diff) else np.nan
+        reason = rec.get('reasons', '')
+        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+        st.markdown(f"<h3>{rec.get('ticker','')} • {rec.get('signal_strength','')}</h3>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='value'>CMP: ₹{cmp_:.2f} | Target: ₹{tgt:.2f}</div>",
+            unsafe_allow_html=True
+        )
+        if not np.isnan(diff):
+            st.markdown(
+                f"<div class='sub'>Target Profit: ₹{diff:.2f} • Profit %: {profit_pct:.2f}%</div>",
+                unsafe_allow_html=True
+            )
+        st.markdown(
+            f"<div class='sub'>Timeframe: {rec.get('timeframe','')} • Setup: {rec.get('period',label)}</div>",
+            unsafe_allow_html=True
+        )
+        if reason:
+            st.markdown(f"<div class='sub'>Reason: {reason}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ========= MAIN UI =========
 def main():
@@ -693,25 +712,6 @@ def main():
     """, unsafe_allow_html=True)
 
     maybe_run_auto_scan()
-
-    # Sidebar: BTST cards
-    with st.sidebar:
-        st.markdown("<div class='side-section'><h4>🌙 BTST Top Picks</h4>", unsafe_allow_html=True)
-        cards = get_btst_top_for_sidebar()
-        if not cards:
-            st.caption("Click ‘Run Full Scan’ to see BTST picks.")
-        else:
-            for rec in cards:
-                tgt = rec.get("target_1", None)
-                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.markdown(f"<h3>{rec.get('ticker','')}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<div class='value'>CMP: ₹{rec.get('price',0):.2f}</div>", unsafe_allow_html=True)
-                if tgt is not None and not np.isnan(tgt):
-                    diff = tgt - rec.get('price', 0)
-                    st.markdown(f"<div class='sub'>Target: ₹{tgt:.2f} • Profit: ₹{diff:.2f}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='sub'>ETA: {rec.get('timeframe','')} • BTST</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # Top controls
     c1, c2, c3 = st.columns([3, 1.2, 1])
@@ -729,84 +729,39 @@ def main():
 
     st.markdown("---")
 
-    # Tabs: Top Stocks / BTST / Intraday / Weekly / Monthly / GROWW / Config(last)
-    tab_top, tab_btst, tab_intraday, tab_weekly, tab_monthly, tab_groww, tab_config = st.tabs(
-        ["🔥 Top Stocks", "🌙 BTST", "⚡ Intraday", "📆 Weekly", "📅 Monthly", "📊 GROWW Stocks", "⚙️ Configuration"]
-    )
+    page = sidebar_nav()
 
-    # Top Stocks tab – 10 best unique scrips with flash cards + table
-    with tab_top:
+    # Routing based on sidebar nav
+    if page == "🔥 Top Stocks":
         st.subheader("Top 10 Stocks Across All Setups")
         top_recs = get_top_stocks(limit=10)
-        if not top_recs:
-            st.info("Run Full Scan to compute top stocks.")
-        else:
-            for rec in top_recs:
-                cmp_ = rec.get('price', 0.0)
-                tgt = rec.get('target_1', np.nan)
-                diff = tgt - cmp_ if tgt is not None and not np.isnan(tgt) else np.nan
-                reason = rec.get('reasons', '')
-                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.markdown(f"<h3>{rec.get('ticker','')} • {rec.get('signal_strength','')}</h3>", unsafe_allow_html=True)
-                st.markdown(
-                    f"<div class='value'>CMP: ₹{cmp_:.2f} | Target: ₹{tgt:.2f} </div>",
-                    unsafe_allow_html=True
-                )
-                if not np.isnan(diff):
-                    st.markdown(
-                        f"<div class='sub'>Target Profit: ₹{diff:.2f} • Δ(CMP→Target): ₹{diff:.2f}</div>",
-                        unsafe_allow_html=True
-                    )
-                st.markdown(
-                    f"<div class='sub'>Timeframe: {rec.get('timeframe','')} • Setup: {rec.get('period','')}</div>",
-                    unsafe_allow_html=True
-                )
-                if reason:
-                    st.markdown(f"<div class='sub'>Reason: {reason}</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            # also show as table with Target Price & Profit%
-            st.markdown("##### Tabular View")
-            show_reco_table(pd.DataFrame(top_recs))
-
-    # BTST tab
-    with tab_btst:
-        recs = st.session_state['recommendations'].get('BTST', [])
+        render_reco_cards(top_recs, "Top")
+    elif page == "🌙 BTST":
         st.subheader("BTST Opportunities")
-        if not recs:
-            st.info("Run Full Scan to generate BTST recommendations.")
-        else:
-            show_reco_table(pd.DataFrame(recs))
-
-    # Intraday tab
-    with tab_intraday:
-        recs = st.session_state['recommendations'].get('Intraday', [])
+        recs = st.session_state['recommendations'].get('BTST', [])
+        # tag period for cards
+        for r in recs:
+            r.setdefault("period", "BTST")
+        render_reco_cards(recs, "BTST")
+    elif page == "⚡ Intraday":
         st.subheader("Intraday Signals")
-        if not recs:
-            st.info("Run Full Scan to generate intraday recommendations.")
-        else:
-            show_reco_table(pd.DataFrame(recs))
-
-    # Weekly tab
-    with tab_weekly:
-        recs = st.session_state['recommendations'].get('Weekly', [])
+        recs = st.session_state['recommendations'].get('Intraday', [])
+        for r in recs:
+            r.setdefault("period", "Intraday")
+        render_reco_cards(recs, "Intraday")
+    elif page == "📆 Weekly":
         st.subheader("Weekly Swing Ideas")
-        if not recs:
-            st.info("Run Full Scan to generate weekly recommendations.")
-        else:
-            show_reco_table(pd.DataFrame(recs))
-
-    # Monthly tab
-    with tab_monthly:
-        recs = st.session_state['recommendations'].get('Monthly', [])
+        recs = st.session_state['recommendations'].get('Weekly', [])
+        for r in recs:
+            r.setdefault("period", "Weekly")
+        render_reco_cards(recs, "Weekly")
+    elif page == "📅 Monthly":
         st.subheader("Monthly Position Trades")
-        if not recs:
-            st.info("Run Full Scan to generate monthly recommendations.")
-        else:
-            show_reco_table(pd.DataFrame(recs))
-
-    # GROWW Stocks tab – CSV upload analysis
-    with tab_groww:
+        recs = st.session_state['recommendations'].get('Monthly', [])
+        for r in recs:
+            r.setdefault("period", "Monthly")
+        render_reco_cards(recs, "Monthly")
+    elif page == "📊 GROWW Stocks":
         st.subheader("GROWW Portfolio Analysis (CSV Upload)")
         st.markdown("CSV template columns (exact names):")
         st.code(
@@ -840,9 +795,7 @@ def main():
                 st.error(f"Error reading uploaded CSV: {e}")
         else:
             st.info("Upload your GROWW portfolio CSV to see analysis here.")
-
-    # Configuration tab (last)
-    with tab_config:
+    elif page == "⚙️ Configuration":
         st.markdown("### App Configuration")
 
         # Dhan configuration and portfolio display
