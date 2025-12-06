@@ -71,7 +71,7 @@ def save_config_from_state():
 
 # ========= PAGE CONFIG & CSS =========
 st.set_page_config(
-    page_title="🤖 AI Enabled Bot",
+    page_title="🤖 AI Stock Analysis Bot",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -193,7 +193,7 @@ st.markdown("""
         background-color: #ea580c !important;
     }
 </style>
-""", unsafe_allow_html=True)  # button CSS via DOM selector [web:441][web:443]
+""", unsafe_allow_html=True)  # styling [web:15][web:26]
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -651,9 +651,28 @@ def get_top_stocks(limit: int = 10):
         return []
     return pd.DataFrame(unique_rows).to_dict(orient="records")
 
-# ========= Groww ANALYSIS =========
-def analyze_groww_portfolio(df: pd.DataFrame):
-    cols = {c.lower(): c for c in df.columns}
+# ========= GRADED GROWW ANALYSIS & FUNDAMENTALS =========
+
+def load_groww_file(uploaded_file):
+    """
+    Load CSV or Excel (xls/xlsx) into DataFrame with auto-separator for CSV.
+    """
+    name = uploaded_file.name.lower()
+    try:
+        if name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+        elif name.endswith((".xls", ".xlsx")):
+            df = pd.read_excel(uploaded_file)  # pandas supports xls/xlsx via engines [web:15][web:25][web:28]
+        else:
+            st.error("Only CSV, XLS, or XLSX files are supported.")
+            return pd.DataFrame()
+        return df
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        return pd.DataFrame()
+
+def map_groww_columns(df: pd.DataFrame):
+    cols = {c.lower().strip(): c for c in df.columns}
     required = [
         "stock name",
         "isin",
@@ -665,30 +684,72 @@ def analyze_groww_portfolio(df: pd.DataFrame):
     ]
     for r in required:
         if r not in cols:
-            return {"error": "Columns must match the Groww template exactly."}
-    qcol = cols["quantity"]
-    invcol = cols["total investment"]
-    pnlcol = cols["total p&l"]
+            return None, f"Columns must match the Groww template exactly. Missing: {r}"
+    return cols, None
 
-    df_use = df.copy()
-    df_use["_qty"] = pd.to_numeric(df_use[qcol], errors="coerce").fillna(0.0)
-    df_use["_inv"] = pd.to_numeric(df_use[invcol], errors="coerce").fillna(0.0)
-    df_use["_pnl"] = pd.to_numeric(df_use[pnlcol], errors="coerce").fillna(0.0)
+def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
+    """
+    Try to fetch dividend yield and approximate CAGR from yfinance.
+    If not available, return defaults: dividend_yield=0, dividend_rupees_per_share=0, cagr=5%.
+    """
+    sym = ""
+    if stock_name:
+        sym = stock_name.split()[0].upper().strip()
+    yf_ticker = NIFTY_YF_MAP.get(sym, None)
+    if not yf_ticker and sym:
+        yf_ticker = f"{sym}.NS"
 
-    total_inv = float(df_use["_inv"].sum())
-    total_pnl = float(df_use["_pnl"].sum())
-    positions = int((df_use["_qty"] > 0).sum())
-    top = (
-        df_use.sort_values("_inv", ascending=False)[[cols["stock name"], cols["quantity"], invcol, pnlcol]]
-        .head(10)
-        .rename(columns={cols["stock name"]: "Stock Name", cols["quantity"]: "Quantity"})
-    )
-    return {
-        "total_investment": total_inv,
-        "total_pnl": total_pnl,
-        "positions": positions,
-        "top_holdings": top,
-    }
+    div_yield = 0.0
+    div_rupees = 0.0
+    cagr = 0.05  # 5% default [web:21][web:30]
+
+    if not yf_ticker:
+        return div_yield, div_rupees, cagr
+
+    try:
+        t = yf.Ticker(yf_ticker)
+        info = t.info or {}
+        raw_yield = info.get("dividendYield")
+        if raw_yield is not None:
+            div_yield = float(raw_yield)  # dividend per share divided by price per share [web:27][web:29]
+        if cmp_value and div_yield:
+            div_rupees = div_yield * cmp_value
+
+        hist = t.history(period="10y")
+        if hist is not None and not hist.empty:
+            hist = hist.dropna(subset=["Close"])
+            first_price = float(hist["Close"].iloc[0])
+            last_price = float(hist["Close"].iloc[-1])
+            years = max((hist.index[-1] - hist.index[0]).days / 365.0, 1.0)
+            if first_price > 0 and years > 0:
+                cagr = (last_price / first_price) ** (1.0 / years) - 1.0  # CAGR formula [web:21]
+    except Exception:
+        pass
+
+    return float(div_yield), float(div_rupees), float(cagr)
+
+def classify_strength(pct_pnl: float, cagr: float, price_zero: bool) -> str:
+    """
+    Categorize into Super Strong / Strong / Medium / Sell.
+    Zero-priced stocks are always Super Strong.
+    """
+    if price_zero:
+        return "Super Strong"
+    if cagr >= 0.15 and pct_pnl >= 20:
+        return "Super Strong"
+    if cagr >= 0.10 and pct_pnl >= 0:
+        return "Strong"
+    if cagr >= 0.05 or pct_pnl > -15:
+        return "Medium"
+    return "Sell"
+
+def project_value(current_value: float, cagr: float, yearly_dividend: float, years: int) -> float:
+    """
+    Future value projection with growth (CAGR) and simple additive dividends.
+    """
+    future = current_value * ((1 + cagr) ** years)
+    future += yearly_dividend * years
+    return float(future)
 
 # ========= FLASH CARD RENDER =========
 def render_reco_cards(recs: List[Dict], label: str):
@@ -753,7 +814,7 @@ def sidebar_nav():
 def main():
     st.markdown("""
     <div class='main-header'>
-        <h1>🤖 AI Enabled Algorithms </h1>
+        <h1>🤖 AI Stock Analysis Bot</h1>
         <p>Multi-timeframe scanner • 📈 NIFTY 200 • 🤝 Dhan • 📊 Groww</p>
         <div class="status-badge">Live • IST</div>
     </div>
@@ -774,10 +835,15 @@ def main():
 
     if st.session_state['last_analysis_time']:
         st.caption(f"🕒 Last Full Scan: {st.session_state['last_analysis_time'].strftime('%d-%m-%Y %I:%M %p')}")
+
+    st.info("On mobile you can view Top 20 stocks. For other views (BTST, Intraday, Weekly, Monthly, Groww, Dhan, Configuration), please open this dashboard on a laptop or desktop.", icon="📱")
+
     st.markdown("---")
+
     page = st.session_state['current_page']
+
     if page == "🔥 Top Stocks":
-        st.subheader("🔥 AI Analysed Picks ")
+        st.subheader("🔥 Top Stocks (up to 20)")
         top_recs = get_top_stocks(limit=20)
         render_reco_cards(top_recs, "Top")
 
@@ -810,39 +876,214 @@ def main():
         render_reco_cards(recs, "Monthly")
 
     elif page == "📊 Groww":
-        st.subheader("📊 Groww Portfolio Analysis (CSV Upload)")
-        st.markdown("Upload your Groww holdings CSV to get instant analytics.")
+        st.subheader("📊 Groww Portfolio Analysis (CSV / Excel Upload)")
+        st.markdown("Upload your Groww holdings file (CSV/XLS/XLSX) to get advanced analytics.")
+
         st.code(
             "Stock Name\tISIN\tQuantity\tAverage buy price per share\t"
             "Total Investment\tTotal CMP\tTOTAL P&L",
             language="text"
         )
+
         uploaded = st.file_uploader(
-            "Upload Groww portfolio CSV", type=["csv"], key="groww_csv_upload"
+            "Upload Groww portfolio file",
+            type=["csv", "xls", "xlsx"],
+            key="groww_file_upload"
         )
+
         if uploaded is not None:
-            try:
-                df_up = pd.read_csv(uploaded, sep=None, engine="python")
-                st.write("🔍 Preview:")
+            df_up = load_groww_file(uploaded)
+            if df_up.empty:
+                st.stop()
+
+            cols, err = map_groww_columns(df_up)
+            if err:
+                st.error(err)
                 st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
-                analysis = analyze_groww_portfolio(df_up)
-                if "error" in analysis:
-                    st.error(analysis["error"])
+                st.stop()
+
+            st.write("🔍 Raw preview:")
+            st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
+
+            qcol = cols["quantity"]
+            invcol = cols["total investment"]
+            cmpcol = cols["total cmp"]
+            pnlcol = cols["total p&l"]
+            namecol = cols["stock name"]
+
+            df = df_up.copy()
+            df["_qty"] = pd.to_numeric(df[qcol], errors="coerce").fillna(0.0)
+            df["_inv"] = pd.to_numeric(df[invcol], errors="coerce").fillna(0.0)
+            df["_cmp_total"] = pd.to_numeric(df[cmpcol], errors="coerce").fillna(0.0)
+            df["_pnl"] = pd.to_numeric(df[pnlcol], errors="coerce").fillna(0.0)
+
+            df["_cmp_per_share"] = np.where(
+                df["_qty"] > 0,
+                df["_cmp_total"] / df["_qty"],
+                0.0
+            )
+
+            div_yields = []
+            div_rupees_list = []
+            cagr_list = []
+            strength_list = []
+
+            st.info("Fetching dividend yield and CAGR for each stock from internet; defaults used if not found.")
+
+            prog = st.progress(0.0)
+            for i, row in df.iterrows():
+                stock_name = str(row[namecol])
+                qty = float(row["_qty"])
+                cmp_ps = float(row["_cmp_per_share"])
+                is_zero_price = cmp_ps <= 0.0
+
+                div_y, div_r, cagr = fetch_dividend_and_cagr(stock_name, str(row[cols["isin"]]), cmp_ps)
+                div_yields.append(div_y)
+                div_rupees_list.append(div_r)
+                cagr_list.append(cagr)
+
+                inv_val = float(row["_inv"])
+                cur_val = float(row["_cmp_total"])
+                pct_pnl = ((cur_val - inv_val) / inv_val * 100.0) if inv_val > 0 else 0.0
+                strength = classify_strength(pct_pnl, cagr, is_zero_price)
+                strength_list.append(strength)
+
+                prog.progress((i + 1) / len(df))
+
+            prog.empty()
+
+            df["Dividend Yield"] = div_yields
+            df["Dividend/Share (₹)"] = div_rupees_list
+            df["CAGR (decimal)"] = cagr_list
+            df["CAGR (%)"] = df["CAGR (decimal)"] * 100.0
+            df["Strength"] = strength_list
+
+            df["Yearly Dividend (₹)"] = df["Dividend/Share (₹)"] * df["_qty"]
+
+            total_inv = float(df["_inv"].sum())
+            total_cmp_val = float(df["_cmp_total"].sum())
+            total_pnl = float(df["_pnl"].sum())
+            total_yearly_div = float(df["Yearly Dividend (₹)"].sum())
+
+            st.markdown("### 📈 Portfolio Snapshot")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("Total Investment", f"₹{total_inv:,.2f}")
+            with c2:
+                st.metric("Current Value", f"₹{total_cmp_val:,.2f}")
+            with c3:
+                st.metric("Total P&L", f"₹{total_pnl:,.2f}")
+
+            if total_cmp_val > 0:
+                df["_weight"] = df["_cmp_total"] / total_cmp_val
+                portfolio_cagr = float((df["CAGR (decimal)"] * df["_weight"]).sum())
+            else:
+                portfolio_cagr = 0.05
+
+            st.markdown("#### 🔮 Portfolio Value Projections (using weighted CAGR & total yearly dividend)")
+            years_list = [1, 5, 10, 15, 20]
+            proj_data = []
+            for y in years_list:
+                v = project_value(total_cmp_val, portfolio_cagr, total_yearly_div, y)
+                proj_data.append({"Years": y, "Projected Value (₹)": round(v, 2)})
+            st.table(pd.DataFrame(proj_data))
+
+            st.markdown("### 🛠 Adjust Portfolio & Recalculate")
+            st.write("You can adjust quantities, CMP, CAGR, and dividend per share, then click **Auto Calculate**.")
+
+            editable_cols = [
+                namecol,
+                cols["isin"],
+                qcol,
+                invcol,
+                cmpcol,
+                "Dividend/Share (₹)",
+                "CAGR (%)",
+            ]
+            edit_df = df[editable_cols].copy()
+            edit_df = st.data_editor(
+                edit_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                key="groww_edit_table"
+            )
+
+            if st.button("⚙️ Auto Calculate", use_container_width=True):
+                df2 = edit_df.copy()
+                df2["_qty"] = pd.to_numeric(df2[qcol], errors="coerce").fillna(0.0)
+                df2["_inv"] = pd.to_numeric(df2[invcol], errors="coerce").fillna(0.0)
+                df2["_cmp_total"] = pd.to_numeric(df2[cmpcol], errors="coerce").fillna(0.0)
+                df2["Dividend/Share (₹)"] = pd.to_numeric(df2["Dividend/Share (₹)"], errors="coerce").fillna(0.0)
+                df2["CAGR (%)"] = pd.to_numeric(df2["CAGR (%)"], errors="coerce").fillna(5.0)
+                df2["CAGR (decimal)"] = df2["CAGR (%)"] / 100.0
+                df2["_pnl"] = df2["_cmp_total"] - df2["_inv"]
+                df2["_cmp_per_share"] = np.where(
+                    df2["_qty"] > 0,
+                    df2["_cmp_total"] / df2["_qty"],
+                    0.0
+                )
+
+                strengths = []
+                for _, r in df2.iterrows():
+                    inv2 = float(r["_inv"])
+                    cur2 = float(r["_cmp_total"])
+                    pct_pnl2 = ((cur2 - inv2) / inv2 * 100.0) if inv2 > 0 else 0.0
+                    is_zero_price2 = float(r["_cmp_per_share"]) <= 0.0
+                    strengths.append(classify_strength(pct_pnl2, float(r["CAGR (decimal)"]), is_zero_price2))
+                df2["Strength"] = strengths
+                df2["Yearly Dividend (₹)"] = df2["Dividend/Share (₹)"] * df2["_qty"]
+
+                total_inv2 = float(df2["_inv"].sum())
+                total_cmp_val2 = float(df2["_cmp_total"].sum())
+                total_pnl2 = float(df2["_pnl"].sum())
+                total_yearly_div2 = float(df2["Yearly Dividend (₹)"].sum())
+
+                if total_cmp_val2 > 0:
+                    df2["_weight"] = df2["_cmp_total"] / total_cmp_val2
+                    portfolio_cagr2 = float((df2["CAGR (decimal)"] * df2["_weight"]).sum())
                 else:
-                    st.markdown("### 📈 Portfolio Snapshot")
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.metric("Total Investment", f"₹{analysis['total_investment']:,.2f}")
-                    with c2:
-                        st.metric("Total P&L", f"₹{analysis['total_pnl']:,.2f}")
-                    with c3:
-                        st.metric("Positions", analysis["positions"])
-                    st.markdown("### 🏅 Top Holdings by Capital")
-                    st.dataframe(analysis["top_holdings"], use_container_width=True, hide_index=True)
-            except Exception as e:
-                st.error(f"Error reading uploaded CSV: {e}")
+                    portfolio_cagr2 = 0.05
+
+                st.markdown("#### 🔁 Recalculated Snapshot")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.metric("Total Investment", f"₹{total_inv2:,.2f}")
+                with c2:
+                    st.metric("Current Value", f"₹{total_cmp_val2:,.2f}")
+                with c3:
+                    st.metric("Total P&L", f"₹{total_pnl2:,.2f}")
+
+                proj2 = []
+                for y in years_list:
+                    v2 = project_value(total_cmp_val2, portfolio_cagr2, total_yearly_div2, y)
+                    proj2.append({"Years": y, "Projected Value (₹)": round(v2, 2)})
+                st.table(pd.DataFrame(proj2))
+
+                st.markdown("#### 📋 Detailed Results with Strength")
+                show_cols = [
+                    namecol,
+                    cols["isin"],
+                    qcol,
+                    invcol,
+                    cmpcol,
+                    "_pnl",
+                    "Dividend/Share (₹)",
+                    "Yearly Dividend (₹)",
+                    "CAGR (%)",
+                    "Strength",
+                ]
+                df_show = df2[show_cols].rename(columns={
+                    namecol: "Stock Name",
+                    cols["isin"]: "ISIN",
+                    qcol: "Quantity",
+                    invcol: "Total Investment",
+                    cmpcol: "Total CMP",
+                    "_pnl": "Total P&L"
+                })
+                st.dataframe(df_show, use_container_width=True, hide_index=True)
         else:
-            st.info("Choose your Groww CSV to see insights here.")
+            st.info("Choose your Groww CSV/XLS/XLSX file to see advanced insights here.")
 
     elif page == "🤝 Dhan":
         st.subheader("🤝 Dhan Portfolio")
