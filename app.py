@@ -74,7 +74,7 @@ st.set_page_config(
     page_title="🚀 AI Stock Bot",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -94,9 +94,56 @@ st.markdown("""
         max-width: 100%;
     }
     
-    /* Hide Sidebar */
+    /* Sidebar Styling */
     [data-testid="stSidebar"] {
-        display: none;
+        background: linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);
+        padding: 1rem;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        color: #f3f4f6;
+    }
+    
+    /* Sidebar Navigation Buttons */
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255,255,255,0.1) !important;
+        color: #f3f4f6 !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        padding: 0.75rem 1rem !important;
+        width: 100% !important;
+        text-align: left !important;
+        transition: all 0.3s ease !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.4) !important;
+        transform: translateX(5px);
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:active,
+    [data-testid="stSidebar"] .stButton > button:focus {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        border-color: rgba(255,255,255,0.3) !important;
+        box-shadow: 0 4px 12px rgba(102,126,234,0.4) !important;
+    }
+    
+    /* Sidebar Headers */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #f3f4f6;
+        font-weight: 700;
+    }
+    
+    /* Sidebar Divider */
+    [data-testid="stSidebar"] hr {
+        border-color: rgba(255,255,255,0.2);
+        margin: 1.5rem 0;
     }
     
     /* Main Header - Responsive */
@@ -156,85 +203,32 @@ st.markdown("""
         z-index: 1;
     }
     
-    /* Navigation - Horizontal Scroll on Mobile */
-    .top-nav {
-        display: flex;
-        gap: 0.5rem;
-        margin: 1rem 0;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(102,126,234,0.5) transparent;
-        padding: 0.5rem 0;
-    }
+
     
-    .top-nav::-webkit-scrollbar {
-        height: 6px;
-    }
-    
-    .top-nav::-webkit-scrollbar-track {
-        background: rgba(255,255,255,0.1);
-        border-radius: 10px;
-    }
-    
-    .top-nav::-webkit-scrollbar-thumb {
-        background: rgba(102,126,234,0.5);
-        border-radius: 10px;
-    }
-    
-    .top-nav::-webkit-scrollbar-thumb:hover {
-        background: rgba(102,126,234,0.8);
-    }
-    
-    /* Navigation Buttons - Improved Mobile Touch */
-    .top-nav .stButton {
-        flex-shrink: 0;
-        min-width: fit-content;
-    }
-    
-    .top-nav .stButton > button {
-        background: rgba(255,255,255,0.9) !important;
-        color: #667eea !important;
-        border-radius: 50px !important;
-        border: 2px solid rgba(102,126,234,0.3) !important;
-        font-size: clamp(0.8rem, 2vw, 0.9rem) !important;
-        font-weight: 600 !important;
-        padding: 0.6rem 1.2rem !important;
-        white-space: nowrap !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-        min-height: 44px !important; /* iOS touch target */
-    }
-    
-    .top-nav .stButton > button:hover {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-color: rgba(255,255,255,0.3) !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
-    }
-    
-    .top-nav .stButton > button:active,
-    .top-nav .stButton > button:focus {
-        background: linear-gradient(135deg, #5a67d8 0%, #6b21a8 100%) !important;
-        color: white !important;
-        transform: translateY(0);
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
-    }
-    
-    /* Metric Cards - Glass Morphism */
+    /* Enhanced Metric Cards with Flash Effect */
     .metric-card {
-        background: rgba(255,255,255,0.95);
+        background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%);
         backdrop-filter: blur(20px);
-        padding: clamp(1rem, 2vw, 1.5rem);
+        padding: clamp(1.2rem, 2.5vw, 1.8rem);
         border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        border: 1px solid rgba(255,255,255,0.5);
-        transition: all 0.3s ease;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        margin-bottom: 1.2rem;
+        border: 1px solid rgba(255,255,255,0.6);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
+        animation: cardFadeIn 0.6s ease-out;
+    }
+    
+    @keyframes cardFadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     
     .metric-card::before {
@@ -243,35 +237,111 @@ st.markdown("""
         top: 0;
         left: 0;
         right: 0;
-        height: 4px;
+        height: 5px;
         background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background-size: 200% 100%;
+        animation: gradientShift 3s ease infinite;
+    }
+    
+    @keyframes gradientShift {
+        0%, 100% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+    }
+    
+    .metric-card::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(102,126,234,0.1) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.4s ease;
     }
     
     .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 16px 48px rgba(102,126,234,0.25);
+        border-color: rgba(102,126,234,0.4);
+    }
+    
+    .metric-card:hover::after {
+        opacity: 1;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1) rotate(0deg);
+        }
+        50% {
+            transform: scale(1.1) rotate(180deg);
+        }
     }
     
     .metric-card h3 {
-        font-size: clamp(1rem, 2.5vw, 1.3rem);
-        color: #2d3748;
-        margin: 0 0 0.8rem 0;
-        font-weight: 700;
+        font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+        color: #1e293b;
+        margin: 0 0 1rem 0;
+        font-weight: 800;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        justify-content: space-between;
+        gap: 0.8rem;
         flex-wrap: wrap;
+        position: relative;
+        z-index: 1;
     }
     
-    .metric-card .value {
-        font-size: clamp(1.1rem, 3vw, 1.4rem);
-        font-weight: 700;
+    .stock-symbol {
+        font-size: clamp(1.3rem, 3vw, 1.6rem);
+        font-weight: 900;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        margin-bottom: 0.5rem;
-        line-height: 1.4;
+        letter-spacing: -0.5px;
+    }
+    
+    .metric-card .value {
+        font-size: clamp(1.2rem, 3vw, 1.5rem);
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 0.8rem;
+        line-height: 1.5;
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .price-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(102,126,234,0.2);
+    }
+    
+    .target-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        background: linear-gradient(135deg, rgba(72,187,120,0.15) 0%, rgba(56,161,105,0.15) 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(72,187,120,0.3);
+        color: #166534;
+        font-weight: 700;
     }
     
     .metric-card .sub {
@@ -291,60 +361,123 @@ st.markdown("""
         font-weight: 700;
     }
     
-    /* Chip Row - Tags */
+    /* Enhanced Chip Row with Better Styling */
     .chip-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.8rem;
+        gap: 0.6rem;
+        margin-top: 1rem;
     }
     
     .chip {
-        padding: 0.3rem 0.8rem;
+        padding: 0.4rem 1rem;
         border-radius: 50px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
-        background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%);
-        border: 1px solid rgba(102,126,234,0.3);
+        font-size: clamp(0.75rem, 1.8vw, 0.85rem);
+        background: linear-gradient(135deg, rgba(102,126,234,0.12) 0%, rgba(118,75,162,0.12) 100%);
+        border: 1.5px solid rgba(102,126,234,0.35);
         color: #5a67d8;
-        font-weight: 600;
+        font-weight: 700;
         white-space: nowrap;
+        transition: all 0.3s ease;
     }
     
-    /* Signal Strength Badges */
-    .signal-strong-buy {
-        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-        color: white;
-        padding: 0.3rem 0.8rem;
-        border-radius: 50px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102,126,234,0.25);
+        border-color: #667eea;
+    }
+    
+    .profit-box {
+        background: linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.15) 100%);
+        border: 2px solid rgba(16,185,129,0.4);
+        padding: 0.8rem 1.2rem;
+        border-radius: 15px;
+        margin-top: 1rem;
         display: inline-block;
+    }
+    
+    .profit-box .profit-label {
+        font-size: clamp(0.85rem, 2vw, 0.95rem);
+        color: #065f46;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .reason-box {
+        background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(37,99,235,0.08) 100%);
+        border-left: 4px solid #3b82f6;
+        padding: 1rem;
+        border-radius: 12px;
+        margin-top: 1rem;
+    }
+    
+    .reason-box .reason-text {
+        font-size: clamp(0.85rem, 2vw, 0.95rem);
+        color: #1e40af;
+        font-weight: 600;
+        line-height: 1.6;
+    }
+    
+    /* Enhanced Signal Strength Badges with Glow */
+    .signal-strong-buy {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 0.4rem 1rem;
+        border-radius: 50px;
+        font-size: clamp(0.7rem, 1.8vw, 0.85rem);
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        display: inline-block;
+        box-shadow: 0 4px 15px rgba(16,185,129,0.4);
+        animation: glowGreen 2s ease-in-out infinite;
+    }
+    
+    @keyframes glowGreen {
+        0%, 100% {
+            box-shadow: 0 4px 15px rgba(16,185,129,0.4);
+        }
+        50% {
+            box-shadow: 0 6px 25px rgba(16,185,129,0.6);
+        }
     }
     
     .signal-buy {
-        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
-        padding: 0.3rem 0.8rem;
+        padding: 0.4rem 1rem;
         border-radius: 50px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
-        font-weight: 700;
+        font-size: clamp(0.7rem, 1.8vw, 0.85rem);
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
         display: inline-block;
+        box-shadow: 0 4px 15px rgba(59,130,246,0.4);
+        animation: glowBlue 2s ease-in-out infinite;
+    }
+    
+    @keyframes glowBlue {
+        0%, 100% {
+            box-shadow: 0 4px 15px rgba(59,130,246,0.4);
+        }
+        50% {
+            box-shadow: 0 6px 25px rgba(59,130,246,0.6);
+        }
     }
     
     .signal-hold {
-        background: linear-gradient(135deg, #ecc94b 0%, #d69e2e 100%);
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
         color: white;
-        padding: 0.3rem 0.8rem;
+        padding: 0.4rem 1rem;
         border-radius: 50px;
-        font-size: clamp(0.7rem, 1.8vw, 0.8rem);
-        font-weight: 700;
+        font-size: clamp(0.7rem, 1.8vw, 0.85rem);
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.08em;
         display: inline-block;
+        box-shadow: 0 4px 15px rgba(245,158,11,0.4);
     }
     
     /* Primary Buttons */
@@ -1015,7 +1148,8 @@ def render_reco_cards(recs: List[Dict], label: str):
         st.info(f"🎯 Tap **Run Full Scan** to generate {label} recommendations")
         return
     df = pd.DataFrame(recs).sort_values("score", ascending=False).head(10)
-    for _, rec in df.iterrows():
+    
+    for idx, (_, rec) in enumerate(df.iterrows(), 1):
         cmp_ = rec.get('price', 0.0)
         tgt = rec.get('target_1', np.nan)
         diff = tgt - cmp_ if tgt is not None and not np.isnan(tgt) else np.nan
@@ -1026,15 +1160,27 @@ def render_reco_cards(recs: List[Dict], label: str):
         badge_class = 'signal-strong-buy' if strength == 'STRONG BUY' else 'signal-buy' if strength == 'BUY' else 'signal-hold'
         
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+        
+        # Header with rank, symbol and badge
         st.markdown(
-            f"<h3>📈 {rec.get('ticker','')} <span class='{badge_class}'>{strength}</span></h3>",
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            f"<div class='value'>💰 CMP: ₹{cmp_:.2f} • 🎯 Target: ₹{tgt:.2f}</div>",
+            f"""<h3>
+                <span style='color: #94a3b8; font-size: 0.9em; margin-right: 0.5rem;'>#{idx}</span>
+                <span class='stock-symbol'>{rec.get('ticker','')}</span>
+                <span class='{badge_class}'>{strength}</span>
+            </h3>""",
             unsafe_allow_html=True
         )
         
+        # Price and Target
+        st.markdown(
+            f"""<div class='value'>
+                <span class='price-tag'>💰 ₹{cmp_:.2f}</span>
+                <span class='target-tag'>🎯 Target: ₹{tgt:.2f}</span>
+            </div>""",
+            unsafe_allow_html=True
+        )
+        
+        # Chips for metadata
         chip_html = "<div class='chip-row'>"
         chip_html += f"<span class='chip'>⭐ Score: {int(rec.get('score',0))}</span>"
         chip_html += f"<span class='chip'>⏱️ {rec.get('timeframe','')}</span>"
@@ -1042,14 +1188,28 @@ def render_reco_cards(recs: List[Dict], label: str):
         chip_html += "</div>"
         st.markdown(chip_html, unsafe_allow_html=True)
         
+        # Profit box
         if not np.isnan(diff):
-            profit_class = 'profit' if diff > 0 else 'loss'
+            profit_emoji = "📈" if diff > 0 else "📉"
             st.markdown(
-                f"<div class='sub'><span class='{profit_class}'>💵 Profit: ₹{diff:.2f} ({profit_pct:.2f}%)</span></div>",
+                f"""<div class='profit-box'>
+                    <div class='profit-label'>
+                        {profit_emoji} Expected Profit: <strong>₹{diff:.2f}</strong> 
+                        (<strong>{profit_pct:.2f}%</strong>)
+                    </div>
+                </div>""",
                 unsafe_allow_html=True
             )
+        
+        # Reason box
         if reason:
-            st.markdown(f"<div class='sub'>💡 {reason}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""<div class='reason-box'>
+                    <div class='reason-text'>💡 <strong>Analysis:</strong> {reason}</div>
+                </div>""",
+                unsafe_allow_html=True
+            )
+        
         st.markdown("</div>", unsafe_allow_html=True)
 
 NAV_PAGES = [
@@ -1063,14 +1223,19 @@ NAV_PAGES = [
     "⚙️ Configuration",
 ]
 
-def top_nav_bar():
-    st.markdown("<div class='top-nav'>", unsafe_allow_html=True)
-    cols = st.columns(len(NAV_PAGES))
-    for i, label in enumerate(NAV_PAGES):
-        with cols[i]:
-            if st.button(label, key=f"nav_{label}", use_container_width=True):
-                st.session_state['current_page'] = label
-    st.markdown("</div>", unsafe_allow_html=True)
+def sidebar_nav():
+    with st.sidebar:
+        st.markdown("### 📂 Navigation")
+        st.markdown("---")
+        
+        for page in NAV_PAGES:
+            if st.button(page, key=f"nav_{page}", use_container_width=True):
+                st.session_state['current_page'] = page
+                st.rerun()
+        
+        st.markdown("---")
+        st.caption("🤖 AI Stock Analysis Bot")
+        st.caption(f"📦 Tracking {len(STOCK_UNIVERSE)} stocks")
 
 def main():
     st.markdown("""
@@ -1082,7 +1247,7 @@ def main():
     """, unsafe_allow_html=True)
 
     auto_scan_if_due()
-    top_nav_bar()
+    sidebar_nav()
 
     c1, c2, c3 = st.columns([3, 1.5, 1])
     with c1:
@@ -1104,11 +1269,13 @@ def main():
 
     if page == "🔥 Top Stocks":
         st.subheader("🔥 Top 10 Stocks Across All Setups")
+        st.caption("💎 Best opportunities ranked by technical score")
         top_recs = get_top_stocks(limit=10)
         render_reco_cards(top_recs, "Top")
         
     elif page == "🌙 BTST":
         st.subheader("🌙 BTST Opportunities")
+        st.caption("📈 Buy Today, Sell Tomorrow setups")
         recs = st.session_state['recommendations'].get('BTST', [])
         for r in recs:
             r.setdefault("period", "BTST")
@@ -1116,6 +1283,7 @@ def main():
         
     elif page == "⚡ Intraday":
         st.subheader("⚡ Intraday Signals")
+        st.caption("🎯 Same-day trading opportunities")
         recs = st.session_state['recommendations'].get('Intraday', [])
         for r in recs:
             r.setdefault("period", "Intraday")
@@ -1123,6 +1291,7 @@ def main():
         
     elif page == "📆 Weekly":
         st.subheader("📆 Weekly Swing Ideas")
+        st.caption("📊 Week-long position trades")
         recs = st.session_state['recommendations'].get('Weekly', [])
         for r in recs:
             r.setdefault("period", "Weekly")
@@ -1130,6 +1299,7 @@ def main():
         
     elif page == "📅 Monthly":
         st.subheader("📅 Monthly Position Trades")
+        st.caption("🎪 Long-term swing opportunities")
         recs = st.session_state['recommendations'].get('Monthly', [])
         for r in recs:
             r.setdefault("period", "Monthly")
