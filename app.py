@@ -963,7 +963,7 @@ def portfolio_csv_recommendations(df: pd.DataFrame, summary: dict):
 def main():
     st.markdown("""
     <div class='main-header'>
-        <h1>🤖 AI Stock Analysis Bot</h1>
+        <h1>🤖 NITIN - AI Stock Analysis Bot</h1>
         <p>Technical Analysis with Shoonya & Dhan Portfolios + Deep CSV Portfolio Analyzer</p>
     </div>
     """, unsafe_allow_html=True)
