@@ -79,104 +79,32 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #ffffff;
-        color: #111827;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* ... keep your existing CSS above ... */
+
+    /* Top navigation buttons: normal, hover, active, focus */
+    .top-nav button[kind="secondary"] {
+        background-color: #e5e7eb !important;      /* light gray */
+        color: #111827 !important;                 /* dark text */
+        border-radius: 999px !important;
+        border: 1px solid #d1d5db !important;
+        font-size: 0.85rem !important;
+        padding: 0.35rem 0.75rem !important;
     }
-    body {
-        background-color: #ffffff;
-        color: #111827;
+    .top-nav button[kind="secondary"]:hover {
+        background-color: #2563eb !important;      /* blue */
+        color: #ffffff !important;
+        border-color: #2563eb !important;
     }
-    /* Hide sidebar visually but keep it functional */
-    [data-testid="stSidebar"] {
-        width: 0 !important;
-        min-width: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-    }
-    [data-testid="stSidebarCollapsedControl"] {
-        display: none;
-    }
-    .main-header {
-        background: linear-gradient(120deg, #2563eb 0%, #7c3aed 35%, #ec4899 100%);
-        padding: 20px 18px;
-        border-radius: 18px;
-        text-align: left;
-        color: white;
-        margin-bottom: 10px;
-        box-shadow: 0 14px 30px rgba(15,23,42,0.35);
-        border: 1px solid rgba(255,255,255,0.18);
-    }
-    .main-header h1 {
-        margin-bottom: 4px;
-        font-size: clamp(1.6rem, 3vw, 2.3rem);
-    }
-    .main-header p {
-        margin: 0;
-        font-size: 0.9rem;
-        opacity: 0.95;
-    }
-    .status-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        background: rgba(15,23,42,0.4);
-        border: 1px solid rgba(148,163,184,0.6);
-        margin-top: 6px;
-    }
-    .top-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 10px 0 6px 0;
-    }
-    @media (max-width: 768px) {
-        .top-nav {
-            justify-content: flex-start;
-        }
-    }
-    .metric-card {
-        padding: 12px 12px;
-        border-radius: 14px;
-        background: radial-gradient(circle at top left, #1f2937 0%, #111827 40%, #020617 100%);
-        border: 1px solid rgba(55,65,81,0.8);
-        box-shadow: 0 10px 25px rgba(15,23,42,0.7);
-        margin-bottom: 10px;
-        color: #e5e7eb;
-    }
-    .metric-card h3 {
-        font-size: 0.95rem;
-        color: #f9fafb;
-        margin-bottom: 4px;
-    }
-    .metric-card .value {
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: #f9fafb;
-    }
-    .metric-card .sub {
-        font-size: 0.8rem;
-        color: #cbd5f5;
-    }
-    .chip-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 4px;
-    }
-    .chip {
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        background: rgba(148,163,184,0.2);
-        border: 1px solid rgba(148,163,184,0.4);
+    .top-nav button[kind="secondary"]:focus,
+    .top-nav button[kind="secondary"]:active {
+        background-color: #1d4ed8 !important;      /* darker blue */
+        color: #ffffff !important;
+        border-color: #1d4ed8 !important;
+        box-shadow: 0 0 0 1px rgba(37,99,235,0.6) !important;
     }
 </style>
-""", unsafe_allow_html=True)  # mobile/desktop friendly tweaks [web:326][web:363]
+""", unsafe_allow_html=True)
+
 
 IST = pytz.timezone('Asia/Kolkata')
 
