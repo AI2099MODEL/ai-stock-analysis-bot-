@@ -6,6 +6,7 @@ ta
 pytz
 requests
 dhanhq
+NorenRestApiPy
 
 
 
