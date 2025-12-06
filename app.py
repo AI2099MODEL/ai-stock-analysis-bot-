@@ -18,7 +18,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import ta
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from typing import Dict, List, Optional
 import pytz
@@ -119,6 +119,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
         border: 1px solid rgba(148,163,184,0.35);
         box-shadow: 0 10px 30px rgba(15,23,42,0.8);
+        margin-bottom: 10px;
     }
     .metric-card h3 {
         font-size: 0.9rem;
@@ -126,7 +127,7 @@ st.markdown("""
         margin-bottom: 2px;
     }
     .metric-card .value {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         font-weight: 600;
         color: #f9fafb;
     }
@@ -158,9 +159,10 @@ IST = pytz.timezone('Asia/Kolkata')
 _cfg = load_config()
 localS = LocalStorage()  # browser localStorage manager
 
-# Server-side base state
 if 'last_analysis_time' not in st.session_state:
     st.session_state['last_analysis_time'] = None
+if 'last_auto_scan' not in st.session_state:
+    st.session_state['last_auto_scan'] = None
 if 'recommendations' not in st.session_state:
     st.session_state['recommendations'] = {'BTST': [], 'Intraday': [], 'Weekly': [], 'Monthly': []}
 if 'portfolio_results' not in st.session_state:
@@ -188,9 +190,10 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ========= NIFTY 200 FROM CSV (read-only from repo) =========
+# ========= NIFTY 200 FROM CSV =========
 DATA_DIR = Path(__file__).parent / "data"
 NIFTY200_CSV = DATA_DIR / "nifty200_yahoo.csv"
+MASTER_NIFTY200 = DATA_DIR / "ind_nifty200list.csv"
 
 @st.cache_data
 def load_nifty200_universe():
@@ -212,6 +215,32 @@ def load_nifty200_universe():
     return symbols, mapping
 
 STOCK_UNIVERSE, NIFTY_YF_MAP = load_nifty200_universe()
+
+def regenerate_nifty200_csv_from_master():
+    if not MASTER_NIFTY200.exists():
+        st.error(f"Master list not found: {MASTER_NIFTY200}")
+        return False
+    try:
+        df_src = pd.read_csv(MASTER_NIFTY200)
+    except Exception as e:
+        st.error(f"Error reading {MASTER_NIFTY200.name}: {e}")
+        return False
+    if "Symbol" not in df_src.columns:
+        st.error("ind_nifty200list.csv must have a 'Symbol' column")
+        return False
+    df_out = pd.DataFrame()
+    df_out["SYMBOL"] = df_src["Symbol"].astype(str).str.strip().str.upper()
+    df_out["YF_TICKER"] = df_out["SYMBOL"].apply(lambda s: f"{s}.NS")
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        df_out.to_csv(NIFTY200_CSV, index=False)
+    except Exception as e:
+        st.error(f"Error writing {NIFTY200_CSV.name}: {e}")
+        return False
+    load_nifty200_universe.clear()
+    global STOCK_UNIVERSE, NIFTY_YF_MAP
+    STOCK_UNIVERSE, NIFTY_YF_MAP = load_nifty200_universe()
+    return True
 
 # ========= SYMBOL HELPERS =========
 def normalize_symbol(raw: str) -> str:
@@ -481,7 +510,7 @@ class TechnicalAnalysis:
             'atr': float(round(atr_v, 2)),
             'stop_loss': float(round(price - (atr_v * 2), 2)),
             'target_1': float(round(price + (atr_v * 2), 2)),
-            'target_2': float(round(price + (atr_v * 3), 2),),
+            'target_2': float(round(price + (atr_v * 3), 2)),
             'target_3': float(round(price + (atr_v * 4), 2)),
             'risk_reward': '1:2-4'
         }
@@ -561,13 +590,15 @@ def analyze_multiple_stocks(tickers: List[str], period_type: str, max_results: i
         res = analyze_stock(tck, period_type)
         if res:
             out.append(res)
-        time.sleep(0.05)
+        time.sleep(0.02)
     bar.empty()
     txt.empty()
     return sorted(out, key=lambda x: x['score'], reverse=True)[:max_results]
 
 def run_analysis():
-    st.session_state['last_analysis_time'] = datetime.now(IST)
+    now = datetime.now(IST)
+    st.session_state['last_analysis_time'] = now
+    st.session_state['last_auto_scan'] = now
     new_recs = {}
     with st.spinner("🔍 Running analysis..."):
         for p in ['BTST', 'Intraday', 'Weekly', 'Monthly']:
@@ -589,15 +620,282 @@ def build_pnl_and_reco_summary():
         lines.append("• No live portfolio data yet.")
     return "\n".join(lines)
 
+# ========= BACKGROUND AUTO SCAN (30 MIN) =========
+def maybe_run_auto_scan():
+    now = datetime.now(IST)
+    last = st.session_state.get('last_auto_scan')
+    should_run = False
+    if last is None:
+        should_run = True
+    else:
+        try:
+            delta = now - last
+            if delta.total_seconds() >= 30 * 60:
+                should_run = True
+        except Exception:
+            should_run = True
+    if should_run:
+        with st.spinner("⏱ Auto scan (30 min interval)..."):
+            run_analysis()
+
+# ========= SIDEBAR TOP 5 RECOMMENDATIONS =========
+def get_top_5_across_periods():
+    all_recs = []
+    for period in ['BTST', 'Intraday', 'Weekly', 'Monthly']:
+        lst = st.session_state['recommendations'].get(period, [])
+        for r in lst:
+            r_copy = dict(r)
+            r_copy['period'] = period
+            all_recs.append(r_copy)
+    if not all_recs:
+        return []
+    df_all = pd.DataFrame(all_recs)
+    df_all = df_all.sort_values(by="score", ascending=False)
+    return df_all.head(5).to_dict(orient="records")
+
+# ========= SIMPLE PORTFOLIO CSV ANALYSIS =========
+def analyze_uploaded_portfolio(df: pd.DataFrame):
+    out = {}
+    if df.empty:
+        return out
+
+    # try to guess columns
+    symbol_col = None
+    for c in df.columns:
+        if str(c).lower() in ["symbol", "stock", "ticker"]:
+            symbol_col = c
+            break
+    qty_col = None
+    for c in df.columns:
+        if str(c).lower() in ["qty", "quantity", "shares"]:
+            qty_col = c
+            break
+    price_col = None
+    for c in df.columns:
+        if "avg" in str(c).lower() and ("price" in str(c).lower() or "cost" in str(c).lower()):
+            price_col = c
+            break
+
+    if not symbol_col or not qty_col or not price_col:
+        return {"error": "Could not infer Symbol / Quantity / Avg Price columns."}
+
+    df_use = df.copy()
+    df_use["_symbol"] = df_use[symbol_col].astype(str).str.strip().str.upper()
+    df_use["_qty"] = pd.to_numeric(df_use[qty_col], errors="coerce").fillna(0.0)
+    df_use["_avg"] = pd.to_numeric(df_use[price_col], errors="coerce").fillna(0.0)
+    df_use["_cost"] = df_use["_qty"] * df_use["_avg"]
+
+    out["total_cost"] = float(df_use["_cost"].sum())
+    out["positions"] = int((df_use["_qty"] > 0).sum())
+    out["top_holdings"] = (
+        df_use.sort_values("_cost", ascending=False)[["_symbol", "_qty", "_avg", "_cost"]]
+        .head(10)
+        .rename(columns={"_symbol": "Symbol", "_qty": "Quantity", "_avg": "Avg Price", "_cost": "Total Cost"})
+    )
+    return out
+
 # ========= MAIN UI =========
 def main():
     st.markdown("""
     <div class='main-header'>
         <h1>🤖 AI Stock Analysis Bot</h1>
-        <p>Multi-timeframe scanner + Dhan + deep portfolio analyzer</p>
+        <p>Multi-timeframe scanner + Dhan + portfolio analyzer</p>
         <div class="status-badge">Live • IST</div>
     </div>
     """, unsafe_allow_html=True)
+
+    # background auto scan every 30 minutes
+    maybe_run_auto_scan()
+
+    # ===== Sidebar: Top 5 Recommendations =====
+    with st.sidebar:
+        st.markdown("<div class='side-section'><h4>🏆 Top 5 Recommendations</h4>", unsafe_allow_html=True)
+        top5 = get_top_5_across_periods()
+        if not top5:
+            st.caption("Run Full Scan to see recommendations.")
+        else:
+            for rec in top5:
+                eta = rec.get('timeframe', '')
+                price = rec.get('price', 0)
+                period = rec.get('period', '')
+                tgt = rec.get('target_1', None)
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.markdown(f"<h3>{rec.get('ticker','')}</h3>", unsafe_allow_html=True)
+                st.markdown(f"<div class='value'>CMP: ₹{price:.2f}</div>", unsafe_allow_html=True)
+                if tgt is not None and not np.isnan(tgt):
+                    st.markdown(f"<div class='sub'>Target: ₹{tgt:.2f}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='sub'>ETA: {eta} • {period}</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Top action buttons with guiding hand
+    c1, c2, c3 = st.columns([3, 1.2, 1])
+    with c1:
+        if st.button("👈 Click here then 🚀 Run Full Scan", type="primary", use_container_width=True, key="btn_full_scan"):
+            run_analysis()
+    with c2:
+        if st.button("🔄 Refresh Page", use_container_width=True, key="btn_refresh"):
+            st.rerun()
+    with c3:
+        st.metric("Universe", len(STOCK_UNIVERSE))
+
+    if st.session_state['last_analysis_time']:
+        st.caption(f"Last Analysis: {st.session_state['last_analysis_time'].strftime('%d-%m-%Y %I:%M %p')}")
+
+    st.markdown("---")
+
+    # Tabs: config + analysis + portfolio
+    tab_config, tab_btst, tab_intraday, tab_weekly, tab_monthly, tab_portfolio = st.tabs(
+        ["⚙️ Configuration", "🌙 BTST", "⚡ Intraday", "📆 Weekly", "📅 Monthly", "📊 Portfolio"]
+    )
+
+    # ---- Configuration Tab ----
+    with tab_config:
+        st.markdown("### App Configuration")
+
+        with st.expander("Dhan", expanded=True):
+            dhan_store = localS.getItem("dhan_config") or {}
+            if dhan_store:
+                st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
+
+            dhan_enable = st.checkbox("Enable Dhan", value=st.session_state.get('dhan_enabled', False))
+            st.session_state['dhan_enabled'] = dhan_enable
+            if dhan_enable:
+                dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''), key="cfg_dhan_client")
+                dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password", key="cfg_dhan_token")
+                st.session_state['dhan_client_id'] = dcid
+                st.session_state['dhan_access_token'] = dtoken
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("🔑 Connect Dhan", use_container_width=True, key="btn_connect_dhan"):
+                        dhan_login(dcid, dtoken)
+                        localS.setItem("dhan_config", {"client_id": dcid})
+                with c2:
+                    if st.button("🚪 Logout Dhan", use_container_width=True, key="btn_logout_dhan"):
+                        dhan_logout()
+                st.caption(st.session_state['dhan_login_msg'])
+
+        with st.expander("Telegram P&L Notifications", expanded=True):
+            tg_store = localS.getItem("telegram_config") or {}
+            if tg_store:
+                st.session_state['telegram_bot_token'] = tg_store.get("bot_token", st.session_state['telegram_bot_token'])
+                st.session_state['telegram_chat_id'] = tg_store.get("chat_id", st.session_state['telegram_chat_id'])
+
+            notify_toggle = st.checkbox("Enable P&L notifications (30 min)", value=st.session_state['notify_enabled'], key="cfg_notify_toggle")
+            st.session_state['notify_enabled'] = notify_toggle
+            tg_token = st.text_input("Bot Token", value=st.session_state['telegram_bot_token'], key="cfg_tg_token")
+            tg_chat = st.text_input("Chat ID", value=st.session_state['telegram_chat_id'], key="cfg_tg_chat")
+            st.session_state['telegram_bot_token'] = tg_token
+            st.session_state['telegram_chat_id'] = tg_chat
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("💾 Save settings", use_container_width=True, key="btn_save_settings"):
+                    save_config_from_state()
+                    localS.setItem("telegram_config", {"bot_token": tg_token, "chat_id": tg_chat})
+                    st.success("Saved to config.json + browser storage")
+            with c2:
+                if st.button("📤 Send P&L Now", use_container_width=True, key="btn_send_pnl"):
+                    text = build_pnl_and_reco_summary()
+                    tg_resp = send_telegram_message(text) if tg_token and tg_chat else {"info": "Telegram not configured"}
+                    st.success("Triggered P&L send. Check Telegram.")
+                    st.json({"telegram": tg_resp})
+
+        with st.expander("Nifty 200 Universe", expanded=False):
+            st.caption(f"Loaded {len(STOCK_UNIVERSE)} symbols from data/nifty200_yahoo.csv")
+            if st.button("🔁 Regenerate CSV (internal)", use_container_width=True, key="btn_regen_nifty"):
+                ok = regenerate_nifty200_csv_from_master()
+                if ok:
+                    st.success("Regenerated data/nifty200_yahoo.csv inside app container.")
+                else:
+                    st.error("Failed to regenerate CSV. See error above.")
+            if st.checkbox("Show universe list", key="chk_show_universe"):
+                st.write(sorted(STOCK_UNIVERSE))
+
+    # ---- BTST Tab ----
+    with tab_btst:
+        btst_recs = st.session_state['recommendations'].get('BTST', [])
+        st.subheader("BTST Opportunities")
+        if not btst_recs:
+            st.info("Run Full Scan to generate BTST recommendations.")
+        else:
+            df = pd.DataFrame(btst_recs)
+            st.dataframe(df, use_container_width=True)
+
+    # ---- Intraday Tab ----
+    with tab_intraday:
+        intraday_recs = st.session_state['recommendations'].get('Intraday', [])
+        st.subheader("Intraday Signals")
+        if not intraday_recs:
+            st.info("Run Full Scan to generate intraday recommendations.")
+        else:
+            df = pd.DataFrame(intraday_recs)
+            st.dataframe(df, use_container_width=True)
+
+    # ---- Weekly Tab ----
+    with tab_weekly:
+        weekly_recs = st.session_state['recommendations'].get('Weekly', [])
+        st.subheader("Weekly Swing Ideas")
+        if not weekly_recs:
+            st.info("Run Full Scan to generate weekly recommendations.")
+        else:
+            df = pd.DataFrame(weekly_recs)
+            st.dataframe(df, use_container_width=True)
+
+    # ---- Monthly Tab ----
+    with tab_monthly:
+        monthly_recs = st.session_state['recommendations'].get('Monthly', [])
+        st.subheader("Monthly Position Trades")
+        if not monthly_recs:
+            st.info("Run Full Scan to generate monthly recommendations.")
+        else:
+            df = pd.DataFrame(monthly_recs)
+            st.dataframe(df, use_container_width=True)
+
+    # ---- Portfolio Tab ----
+    with tab_portfolio:
+        st.subheader("Portfolio (Dhan + CSV Upload)")
+
+        # Dhan live portfolio
+        df_port, total_pnl = format_dhan_portfolio_table()
+        with st.expander("Live Dhan Portfolio", expanded=False):
+            if df_port is None or df_port.empty:
+                st.info("Connect Dhan in the Configuration tab to see live portfolio.")
+            else:
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.dataframe(df_port, use_container_width=True)
+                with c2:
+                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                    st.markdown("<h3>Total P&L</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+        # CSV portfolio analyzer
+        st.markdown("---")
+        st.markdown("#### Upload portfolio CSV for offline analysis")
+        uploaded = st.file_uploader("Upload CSV (Symbol, Quantity, AvgPrice, etc.)", type=["csv"], key="portfolio_csv_upload")
+        if uploaded is not None:
+            try:
+                df_up = pd.read_csv(uploaded)
+                st.write("Preview:")
+                st.dataframe(df_up.head(), use_container_width=True)
+                analysis = analyze_uploaded_portfolio(df_up)
+                if "error" in analysis:
+                    st.error(analysis["error"])
+                else:
+                    st.markdown("##### Summary")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.metric("Total Cost", f"₹{analysis['total_cost']:,.2f}")
+                    with c2:
+                        st.metric("Positions", analysis["positions"])
+                    st.markdown("##### Top holdings by capital")
+                    st.dataframe(analysis["top_holdings"], use_container_width=True)
+            except Exception as e:
+                st.error(f"Error reading uploaded CSV: {e}")
+        else:
+            st.info("Upload a portfolio CSV to see analysis here.")
 
     # Auto P&L Telegram every ~30 min
     if st.session_state.get('notify_enabled', False):
@@ -618,136 +916,6 @@ def main():
             _ = send_telegram_message(text)
             st.session_state['last_pnl_notify'] = now
             st.info("Auto P&L notification triggered (30-min interval).")
-
-    # ===== Sidebar =====
-    with st.sidebar:
-        st.markdown("<div class='side-section'><h4>⚙️ Configuration</h4>", unsafe_allow_html=True)
-        if st.session_state['last_analysis_time']:
-            st.caption(f"Last Analysis: {st.session_state['last_analysis_time'].strftime('%I:%M %p')}")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div class='side-section'><h4>💼 Dhan</h4>", unsafe_allow_html=True)
-        dhan_store = localS.getItem("dhan_config") or {}
-        if dhan_store:
-            st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
-
-        dhan_enable = st.checkbox("Enable Dhan", value=st.session_state.get('dhan_enabled', False))
-        st.session_state['dhan_enabled'] = dhan_enable
-        if dhan_enable:
-            dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''))
-            dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password")
-            st.session_state['dhan_client_id'] = dcid
-            st.session_state['dhan_access_token'] = dtoken
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🔑 Connect Dhan", use_container_width=True):
-                    dhan_login(dcid, dtoken)
-                    localS.setItem("dhan_config", {"client_id": dcid})
-            with c2:
-                if st.button("🚪 Logout Dhan", use_container_width=True):
-                    dhan_logout()
-            st.caption(st.session_state['dhan_login_msg'])
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div class='side-section'><h4>📣 Telegram</h4>", unsafe_allow_html=True)
-        tg_store = localS.getItem("telegram_config") or {}
-        if tg_store:
-            st.session_state['telegram_bot_token'] = tg_store.get("bot_token", st.session_state['telegram_bot_token'])
-            st.session_state['telegram_chat_id'] = tg_store.get("chat_id", st.session_state['telegram_chat_id'])
-
-        notify_toggle = st.checkbox("Enable P&L notifications (30 min)", value=st.session_state['notify_enabled'])
-        st.session_state['notify_enabled'] = notify_toggle
-        tg_token = st.text_input("Bot Token", value=st.session_state['telegram_bot_token'])
-        tg_chat = st.text_input("Chat ID", value=st.session_state['telegram_chat_id'])
-        st.session_state['telegram_bot_token'] = tg_token
-        st.session_state['telegram_chat_id'] = tg_chat
-
-        if st.button("💾 Save settings", use_container_width=True):
-            save_config_from_state()
-            localS.setItem("telegram_config", {"bot_token": tg_token, "chat_id": tg_chat})
-            st.success("Saved to config.json + browser storage")
-
-        if st.button("📤 Send P&L Now", use_container_width=True):
-            text = build_pnl_and_reco_summary()
-            tg_resp = send_telegram_message(text) if tg_token and tg_chat else {"info": "Telegram not configured"}
-            st.success("Triggered P&L send. Check Telegram.")
-            st.json({"telegram": tg_resp})
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div class='side-section'><h4>📂 Nifty 200 Universe</h4>", unsafe_allow_html=True)
-        st.caption(f"Loaded {len(STOCK_UNIVERSE)} symbols from data/nifty200_yahoo.csv")
-        if st.checkbox("Show list"):
-            st.write(sorted(STOCK_UNIVERSE))
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # Top action buttons
-    c1, c2, c3 = st.columns([3, 1.2, 1])
-    with c1:
-        if st.button("🚀 Run Full Scan", type="primary", use_container_width=True):
-            run_analysis()
-    with c2:
-        if st.button("🔄 Refresh Page", use_container_width=True):
-            st.rerun()
-    with c3:
-        st.metric("Universe", len(STOCK_UNIVERSE))
-
-    st.markdown("---")
-
-    # Tabs
-    tab_btst, tab_intraday, tab_weekly, tab_monthly, tab_portfolio = st.tabs(
-        ["🌙 BTST", "⚡ Intraday", "📆 Weekly", "📅 Monthly", "📊 Portfolio"]
-    )
-
-    with tab_btst:
-        btst_recs = st.session_state['recommendations'].get('BTST', [])
-        st.subheader("BTST Opportunities")
-        if not btst_recs:
-            st.info("Run Full Scan to generate BTST recommendations.")
-        else:
-            df = pd.DataFrame(btst_recs)
-            st.dataframe(df, use_container_width=True)
-
-    with tab_intraday:
-        intraday_recs = st.session_state['recommendations'].get('Intraday', [])
-        st.subheader("Intraday Signals")
-        if not intraday_recs:
-            st.info("Run Full Scan to generate intraday recommendations.")
-        else:
-            df = pd.DataFrame(intraday_recs)
-            st.dataframe(df, use_container_width=True)
-
-    with tab_weekly:
-        weekly_recs = st.session_state['recommendations'].get('Weekly', [])
-        st.subheader("Weekly Swing Ideas")
-        if not weekly_recs:
-            st.info("Run Full Scan to generate weekly recommendations.")
-        else:
-            df = pd.DataFrame(weekly_recs)
-            st.dataframe(df, use_container_width=True)
-
-    with tab_monthly:
-        monthly_recs = st.session_state['recommendations'].get('Monthly', [])
-        st.subheader("Monthly Position Trades")
-        if not monthly_recs:
-            st.info("Run Full Scan to generate monthly recommendations.")
-        else:
-            df = pd.DataFrame(monthly_recs)
-            st.dataframe(df, use_container_width=True)
-
-    with tab_portfolio:
-        st.subheader("Portfolio (Dhan)")
-        df_port, total_pnl = format_dhan_portfolio_table()
-        if df_port is None or df_port.empty:
-            st.info("Connect Dhan to see portfolio.")
-        else:
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.dataframe(df_port, use_container_width=True)
-            with c2:
-                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.markdown("<h3>Total P&L</h3>", unsafe_allow_html=True)
-                st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
