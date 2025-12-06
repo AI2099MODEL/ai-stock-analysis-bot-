@@ -38,8 +38,6 @@ except ImportError:
     except Exception:
         NorenApi = None
 
-
-
 # Dhan
 try:
     from dhanhq import dhanhq
