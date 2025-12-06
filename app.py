@@ -212,7 +212,7 @@ st.markdown("""
 
     .metric-card h3 {
         font-size: 0.95rem;
-        color: #ffffff;
+        color: #e5e7eb;
         margin-bottom: 4px;
     }
     .metric-card .value {
