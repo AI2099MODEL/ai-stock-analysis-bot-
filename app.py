@@ -18,7 +18,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import ta
-from datetime import datetime, time as dtime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import pytz
 import requests
@@ -74,7 +74,7 @@ st.set_page_config(
     page_title="🤖 AI Stock Analysis Bot",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
@@ -82,29 +82,40 @@ st.markdown("""
     .stApp {
         background-color: #ffffff;
         color: #111827;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     body {
         background-color: #ffffff;
         color: #111827;
     }
+    /* Hide sidebar content visually but keep it functional */
+    [data-testid="stSidebar"] {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] {
+        display: none;
+    }
     .main-header {
         background: linear-gradient(120deg, #2563eb 0%, #7c3aed 35%, #ec4899 100%);
-        padding: 28px 30px;
+        padding: 20px 18px;
         border-radius: 18px;
-        text-align: center;
+        text-align: left;
         color: white;
-        margin-bottom: 26px;
-        box-shadow: 0 14px 30px rgba(15,23,42,0.4);
-        border: 1px solid rgba(255,255,255,0.12);
+        margin-bottom: 10px;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.35);
+        border: 1px solid rgba(255,255,255,0.18);
     }
     .main-header h1 {
         margin-bottom: 4px;
-        font-size: 2.1rem;
+        font-size: clamp(1.6rem, 3vw, 2.3rem);
     }
     .main-header p {
         margin: 0;
-        font-size: 0.95rem;
-        opacity: 0.9;
+        font-size: 0.9rem;
+        opacity: 0.95;
     }
     .status-badge {
         display: inline-block;
@@ -115,20 +126,34 @@ st.markdown("""
         letter-spacing: 0.07em;
         background: rgba(15,23,42,0.4);
         border: 1px solid rgba(148,163,184,0.6);
-        margin-top: 8px;
+        margin-top: 6px;
+    }
+    .top-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 10px 0 6px 0;
+    }
+    .top-nav button[kind="secondary"] {
+        border-radius: 999px !important;
+    }
+    @media (max-width: 768px) {
+        .top-nav {
+            justify-content: flex-start;
+        }
     }
     .metric-card {
         padding: 12px 12px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
-        border: 1px solid rgba(191,219,254,0.5);
-        box-shadow: 0 10px 25px rgba(15,23,42,0.9);
+        border-radius: 14px;
+        background: radial-gradient(circle at top left, #1f2937 0%, #111827 40%, #020617 100%);
+        border: 1px solid rgba(55,65,81,0.8);
+        box-shadow: 0 10px 25px rgba(15,23,42,0.7);
         margin-bottom: 10px;
         color: #e5e7eb;
     }
     .metric-card h3 {
-        font-size: 0.9rem;
-        color: #e5e7eb;
+        font-size: 0.95rem;
+        color: #f9fafb;
         margin-bottom: 4px;
     }
     .metric-card .value {
@@ -137,27 +162,24 @@ st.markdown("""
         color: #f9fafb;
     }
     .metric-card .sub {
-        font-size: 0.75rem;
-        color: #c4b5fd;
+        font-size: 0.8rem;
+        color: #cbd5f5;
     }
-    .side-section {
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: linear-gradient(145deg, #4c1d95 0%, #581c87 50%, #7c3aed 100%);
-        border: 1px solid rgba(221,214,254,0.6);
-        margin-bottom: 12px;
+    .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
     }
-    .side-section h4 {
-        font-size: 0.9rem;
-        margin-bottom: 8px;
-        color: #f5f3ff;
-    }
-    [data-testid=stSidebar] {
-        background: radial-gradient(circle at top, #4c1d95 0, #581c87 40%, #2e1065 100%);
-        color: #f9fafb;
+    .chip {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        background: rgba(148,163,184,0.2);
+        border: 1px solid rgba(148,163,184,0.4);
     }
 </style>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)  # responsive tweaks + top nav idea [web:346][web:353]
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -171,6 +193,8 @@ if 'last_auto_scan' not in st.session_state:
     st.session_state['last_auto_scan'] = None
 if 'recommendations' not in st.session_state:
     st.session_state['recommendations'] = {'BTST': [], 'Intraday': [], 'Weekly': [], 'Monthly': []}
+if 'current_page' not in st.session_state:
+    st.session_state['current_page'] = "🔥 Top Stocks"
 
 # Dhan state
 for key, default in [
@@ -560,18 +584,18 @@ def run_analysis():
     for p in ['BTST', 'Intraday', 'Weekly', 'Monthly']:
         st.session_state['recommendations'][p] = analyze_multiple_stocks(STOCK_UNIVERSE, p, max_results=20)
 
-# ========= BACKGROUND AUTO SCAN =========
-def market_hours_window():
-    now = datetime.now(IST)
-    start = now.replace(hour=9, minute=10, second=0, microsecond=0)
-    end = now.replace(hour=15, minute=40, second=0, microsecond=0)
-    return start <= now <= end
+# ========= BACKGROUND AUTO SCAN FRAGMENT (TRUE TIMER) =========
+def market_hours_window(dt: datetime):
+    start = dt.replace(hour=9, minute=10, second=0, microsecond=0)
+    end = dt.replace(hour=15, minute=40, second=0, microsecond=0)
+    return start <= dt <= end
 
-def maybe_run_auto_scan():
+@st.experimental_fragment(run_every="20m")  # auto-rerun every 20 minutes [web:355]
+def auto_scan_fragment():
     now = datetime.now(IST)
     last = st.session_state.get('last_auto_scan')
-    should_run = False
-    if market_hours_window():
+    if market_hours_window(now):
+        should_run = False
         if last is None:
             should_run = True
         else:
@@ -580,8 +604,9 @@ def maybe_run_auto_scan():
                     should_run = True
             except Exception:
                 should_run = True
-    if should_run:
-        run_analysis()
+        if should_run:
+            run_analysis()
+            st.write(f"🕒 Auto-scan executed at {now.strftime('%H:%M:%S')} IST")
 
 # ========= TOP STOCKS AGGREGATION (NO DUPLICATES) =========
 def get_top_stocks(limit: int = 10):
@@ -607,40 +632,7 @@ def get_top_stocks(limit: int = 10):
         return []
     return pd.DataFrame(unique_rows).to_dict(orient="records")
 
-# ========= SIDEBAR NAVIGATION =========
-PAGES = [
-    "🔥 Top Stocks",
-    "🌙 BTST",
-    "⚡ Intraday",
-    "📆 Weekly",
-    "📅 Monthly",
-    "📊 Groww",
-    "⚙️ Configuration",
-]
-
-def sidebar_nav():
-    with st.sidebar:
-        st.markdown("<div class='side-section'><h4>📂 Navigation</h4>", unsafe_allow_html=True)
-        page = st.radio(
-            "Go to",
-            PAGES,
-            index=0,
-            label_visibility="collapsed",
-        )  # navigation panel [web:325][web:326][web:333]
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Dhan portfolio quick view in sidebar
-        with st.expander("Dhan Portfolio (Quick View)", expanded=False):
-            df_port, total_pnl = format_dhan_portfolio_table()
-            if df_port is None or df_port.empty:
-                st.caption("No Dhan holdings/positions yet or not connected.")
-            else:
-                st.dataframe(df_port, use_container_width=True, hide_index=True)
-                st.caption(f"Total P&L: ₹{total_pnl:,.2f}")
-
-    return page
-
-# ========= GROWW / GROWW ANALYSIS =========
+# ========= GROWW / Groww ANALYSIS =========
 def analyze_groww_portfolio(df: pd.DataFrame):
     cols = {c.lower(): c for c in df.columns}
     required = [
@@ -654,7 +646,7 @@ def analyze_groww_portfolio(df: pd.DataFrame):
     ]
     for r in required:
         if r not in cols:
-            return {"error": "Columns must match the GROWW template exactly."}
+            return {"error": "Columns must match the Groww template exactly."}
     qcol = cols["quantity"]
     invcol = cols["total investment"]
     pnlcol = cols["total p&l"]
@@ -682,7 +674,7 @@ def analyze_groww_portfolio(df: pd.DataFrame):
 # ========= FLASH CARD RENDER =========
 def render_reco_cards(recs: List[Dict], label: str):
     if not recs:
-        st.info(f"Run Full Scan to generate {label} recommendations.")
+        st.info(f"Tap 🚀 Run Full Scan to generate {label} ideas.")
         return
     df = pd.DataFrame(recs).sort_values("score", ascending=False).head(10)
     for _, rec in df.iterrows():
@@ -692,85 +684,110 @@ def render_reco_cards(recs: List[Dict], label: str):
         profit_pct = (diff / cmp_ * 100) if cmp_ and not np.isnan(diff) else np.nan
         reason = rec.get('reasons', '')
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown(f"<h3>{rec.get('ticker','')} • {rec.get('signal_strength','')}</h3>", unsafe_allow_html=True)
         st.markdown(
-            f"<div class='value'>CMP: ₹{cmp_:.2f} | Target: ₹{tgt:.2f}</div>",
+            f"<h3>{rec.get('ticker','')} • {rec.get('signal_strength','')} ⚡</h3>",
             unsafe_allow_html=True
         )
+        st.markdown(
+            f"<div class='value'>💰 CMP: ₹{cmp_:.2f}  | 🎯 Target: ₹{tgt:.2f}</div>",
+            unsafe_allow_html=True
+        )
+        chip_html = "<div class='chip-row'>"
+        chip_html += f"<span class='chip'>⭐ Score: {int(rec.get('score',0))}</span>"
+        chip_html += f"<span class='chip'>⏱ {rec.get('timeframe','')}</span>"
+        chip_html += f"<span class='chip'>📊 {rec.get('period',label)}</span>"
+        chip_html += "</div>"
+        st.markdown(chip_html, unsafe_allow_html=True)
         if not np.isnan(diff):
             st.markdown(
-                f"<div class='sub'>Target Profit: ₹{diff:.2f} • Profit %: {profit_pct:.2f}%</div>",
+                f"<div class='sub'>📈 Target Profit: ₹{diff:.2f} • 💹 Profit %: {profit_pct:.2f}%</div>",
                 unsafe_allow_html=True
             )
-        st.markdown(
-            f"<div class='sub'>Timeframe: {rec.get('timeframe','')} • Setup: {rec.get('period',label)}</div>",
-            unsafe_allow_html=True
-        )
         if reason:
-            st.markdown(f"<div class='sub'>Reason: {reason}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='sub'>🧠 Reason: {reason}</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+# ========= TOP NAVIGATION =========
+NAV_PAGES = [
+    "🔥 Top Stocks",
+    "🌙 BTST",
+    "⚡ Intraday",
+    "📆 Weekly",
+    "📅 Monthly",
+    "📊 Groww",
+    "⚙️ Configuration",
+]
+
+def top_nav_bar():
+    cols = st.columns(len(NAV_PAGES))
+    for i, label in enumerate(NAV_PAGES):
+        with cols[i]:
+            if st.button(label, key=f"nav_{label}", use_container_width=True):
+                st.session_state['current_page'] = label
 
 # ========= MAIN UI =========
 def main():
     st.markdown("""
     <div class='main-header'>
         <h1>🤖 AI Stock Analysis Bot</h1>
-        <p>Multi-timeframe scanner + Dhan + GROWW portfolio analyzer</p>
+        <p>Multi-timeframe scanner • 📈 NIFTY 200 • 🤝 Dhan • 📊 Groww</p>
         <div class="status-badge">Live • IST</div>
     </div>
     """, unsafe_allow_html=True)
 
-    maybe_run_auto_scan()
+    # Start background fragment (auto scan)
+    auto_scan_fragment()
 
-    # Top controls
+    top_nav_bar()
+
     c1, c2, c3 = st.columns([3, 1.2, 1])
     with c1:
-        if st.button("👈 Click here then 🚀 Run Full Scan", type="primary", use_container_width=True):
+        if st.button("🚀 Run Full Scan", type="primary", use_container_width=True):
             run_analysis()
     with c2:
-        if st.button("🔄 Refresh Page", use_container_width=True):
+        if st.button("🔄 Refresh View", use_container_width=True):
             st.rerun()
     with c3:
-        st.metric("Universe", len(STOCK_UNIVERSE))
+        st.metric("📦 Universe", len(STOCK_UNIVERSE))
 
     if st.session_state['last_analysis_time']:
-        st.caption(f"Last Analysis: {st.session_state['last_analysis_time'].strftime('%d-%m-%Y %I:%M %p')}")
+        st.caption(f"🕒 Last Full Scan: {st.session_state['last_analysis_time'].strftime('%d-%m-%Y %I:%M %p')}")
 
     st.markdown("---")
 
-    page = sidebar_nav()
+    page = st.session_state['current_page']
 
     if page == "🔥 Top Stocks":
-        st.subheader("Top 10 Stocks Across All Setups")
+        st.subheader("🔥 Top 10 Stocks Across All Setups")
         top_recs = get_top_stocks(limit=10)
         render_reco_cards(top_recs, "Top")
     elif page == "🌙 BTST":
-        st.subheader("BTST Opportunities")
+        st.subheader("🌙 BTST Opportunities")
         recs = st.session_state['recommendations'].get('BTST', [])
         for r in recs:
             r.setdefault("period", "BTST")
         render_reco_cards(recs, "BTST")
     elif page == "⚡ Intraday":
-        st.subheader("Intraday Signals")
+        st.subheader("⚡ Intraday Signals")
         recs = st.session_state['recommendations'].get('Intraday', [])
         for r in recs:
             r.setdefault("period", "Intraday")
         render_reco_cards(recs, "Intraday")
     elif page == "📆 Weekly":
-        st.subheader("Weekly Swing Ideas")
+        st.subheader("📆 Weekly Swing Ideas")
         recs = st.session_state['recommendations'].get('Weekly', [])
         for r in recs:
             r.setdefault("period", "Weekly")
         render_reco_cards(recs, "Weekly")
     elif page == "📅 Monthly":
-        st.subheader("Monthly Position Trades")
+        st.subheader("📅 Monthly Position Trades")
         recs = st.session_state['recommendations'].get('Monthly', [])
         for r in recs:
             r.setdefault("period", "Monthly")
         render_reco_cards(recs, "Monthly")
     elif page == "📊 Groww":
-        st.subheader("Groww Portfolio Analysis (CSV Upload)")
-        st.markdown("CSV template columns (exact names):")
+        st.subheader("📊 Groww Portfolio Analysis (CSV Upload)")
+        st.markdown("Upload your Groww holdings CSV to get instant analytics.")
         st.code(
             "Stock Name\tISIN\tQuantity\tAverage buy price per share\t"
             "Total Investment\tTotal CMP\tTOTAL P&L",
@@ -782,13 +799,13 @@ def main():
         if uploaded is not None:
             try:
                 df_up = pd.read_csv(uploaded, sep=None, engine="python")
-                st.write("Preview:")
+                st.write("🔍 Preview:")
                 st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
                 analysis = analyze_groww_portfolio(df_up)
                 if "error" in analysis:
                     st.error(analysis["error"])
                 else:
-                    st.markdown("##### Summary")
+                    st.markdown("### 📈 Portfolio Snapshot")
                     c1, c2, c3 = st.columns(3)
                     with c1:
                         st.metric("Total Investment", f"₹{analysis['total_investment']:,.2f}")
@@ -796,16 +813,17 @@ def main():
                         st.metric("Total P&L", f"₹{analysis['total_pnl']:,.2f}")
                     with c3:
                         st.metric("Positions", analysis["positions"])
-                    st.markdown("##### Top holdings by capital")
+                    st.markdown("### 🏅 Top Holdings by Capital")
                     st.dataframe(analysis["top_holdings"], use_container_width=True, hide_index=True)
             except Exception as e:
                 st.error(f"Error reading uploaded CSV: {e}")
         else:
-            st.info("Upload your Groww portfolio CSV to see analysis here.")
+            st.info("Choose your Groww CSV to see insights here.")
     elif page == "⚙️ Configuration":
-        st.markdown("### App Configuration")
+        st.markdown("### ⚙️ App Configuration")
 
-        with st.expander("Dhan (Connect + Portfolio)", expanded=True):
+        # Groww is above; now Dhan after Groww in the overall journey
+        with st.expander("🤝 Dhan (Connect + Portfolio)", expanded=True):
             dhan_store = localS.getItem("dhan_config") or {}
             if dhan_store:
                 st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
@@ -840,7 +858,7 @@ def main():
                         st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
 
-        with st.expander("Telegram P&L Notifications", expanded=False):
+        with st.expander("📨 Telegram P&L Notifications", expanded=False):
             tg_store = localS.getItem("telegram_config") or {}
             if tg_store:
                 st.session_state['telegram_bot_token'] = tg_store.get("bot_token", st.session_state['telegram_bot_token'])
@@ -866,7 +884,7 @@ def main():
                     st.success("Triggered P&L send. Check Telegram.")
                     st.json({"telegram": tg_resp})
 
-        with st.expander("Nifty 200 Universe", expanded=False):
+        with st.expander("📂 Nifty 200 Universe", expanded=False):
             if st.button("🔁 Regenerate NIFTY 200 CSV (internal)", use_container_width=True, key="btn_regen_nifty"):
                 ok = regenerate_nifty200_csv_from_master()
                 if ok:
