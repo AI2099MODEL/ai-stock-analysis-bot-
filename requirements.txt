@@ -7,6 +7,8 @@ pytz
 requests
 dhanhq
 NorenRestApiPy
+streamlit-local-storage
+
 
 
 
