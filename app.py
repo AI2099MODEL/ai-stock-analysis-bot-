@@ -28,15 +28,18 @@ import json
 
 # Shoonya (Finvasia)
 NorenApi = None
+_shoonya_import_error = None
 try:
-    # Common layout for norenrestapipy 0.0.22 on Linux
+    # Try canonical casing
     from NorenRestApiPy.NorenApi import NorenApi  # type: ignore
-except ImportError:
+except Exception as e1:
     try:
-        # Some builds expose module in lowercase
+        # Fallback: lowercase package name
         from norenrestapipy.NorenApi import NorenApi  # type: ignore
-    except Exception:
+    except Exception as e2:
         NorenApi = None
+        _shoonya_import_error = f"{e1} | {e2}"
+
 
 # Dhan
 try:
