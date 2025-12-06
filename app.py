@@ -71,7 +71,7 @@ def save_config_from_state():
 
 # ========= PAGE CONFIG & CSS =========
 st.set_page_config(
-    page_title="🤖 AI Stock Analysis Bot",
+    page_title="🤖 AI Enabled Bot",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
