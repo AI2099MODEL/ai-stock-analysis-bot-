@@ -79,32 +79,125 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* ... keep your existing CSS above ... */
-
+    .stApp {
+        background-color: #ffffff;
+        color: #111827;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+        background-color: #ffffff;
+        color: #111827;
+    }
+    /* Hide sidebar visually but keep it functional */
+    [data-testid="stSidebar"] {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] {
+        display: none;
+    }
+    .main-header {
+        background: linear-gradient(120deg, #2563eb 0%, #7c3aed 35%, #ec4899 100%);
+        padding: 20px 18px;
+        border-radius: 18px;
+        text-align: left;
+        color: white;
+        margin-bottom: 10px;
+        box-shadow: 0 14px 30px rgba(15,23,42,0.35);
+        border: 1px solid rgba(255,255,255,0.18);
+    }
+    .main-header h1 {
+        margin-bottom: 4px;
+        font-size: clamp(1.6rem, 3vw, 2.3rem);
+    }
+    .main-header p {
+        margin: 0;
+        font-size: 0.9rem;
+        opacity: 0.95;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        background: rgba(15,23,42,0.4);
+        border: 1px solid rgba(148,163,184,0.6);
+        margin-top: 6px;
+    }
+    .top-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 10px 0 6px 0;
+    }
+    @media (max-width: 768px) {
+        .top-nav {
+            justify-content: flex-start;
+        }
+    }
     /* Top navigation buttons: normal, hover, active, focus */
-    .top-nav button[kind="secondary"] {
-        background-color: #e5e7eb !important;      /* light gray */
-        color: #111827 !important;                 /* dark text */
+    .top-nav .stButton > button {
+        background-color: #e5e7eb !important;
+        color: #111827 !important;
         border-radius: 999px !important;
         border: 1px solid #d1d5db !important;
         font-size: 0.85rem !important;
         padding: 0.35rem 0.75rem !important;
     }
-    .top-nav button[kind="secondary"]:hover {
-        background-color: #2563eb !important;      /* blue */
+    .top-nav .stButton > button:hover {
+        background-color: #2563eb !important;
         color: #ffffff !important;
         border-color: #2563eb !important;
     }
-    .top-nav button[kind="secondary"]:focus,
-    .top-nav button[kind="secondary"]:active {
-        background-color: #1d4ed8 !important;      /* darker blue */
+    .top-nav .stButton > button:focus,
+    .top-nav .stButton > button:active {
+        background-color: #1d4ed8 !important;
         color: #ffffff !important;
         border-color: #1d4ed8 !important;
         box-shadow: 0 0 0 1px rgba(37,99,235,0.6) !important;
     }
+    .metric-card {
+        padding: 12px 12px;
+        border-radius: 14px;
+        background: radial-gradient(circle at top left, #1f2937 0%, #111827 40%, #020617 100%);
+        border: 1px solid rgba(55,65,81,0.8);
+        box-shadow: 0 10px 25px rgba(15,23,42,0.7);
+        margin-bottom: 10px;
+        color: #e5e7eb;
+    }
+    .metric-card h3 {
+        font-size: 0.95rem;
+        color: #f9fafb;
+        margin-bottom: 4px;
+    }
+    .metric-card .value {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #f9fafb;
+    }
+    .metric-card .sub {
+        font-size: 0.8rem;
+        color: #cbd5f5;
+    }
+    .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+    }
+    .chip {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        background: rgba(148,163,184,0.2);
+        border: 1px solid rgba(148,163,184,0.4);
+    }
 </style>
-""", unsafe_allow_html=True)
-
+""", unsafe_allow_html=True)  # button styling + responsive nav [web:372][web:377]
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -640,6 +733,7 @@ NAV_PAGES = [
     "📆 Weekly",
     "📅 Monthly",
     "📊 Groww",
+    "🤝 Dhan",
     "⚙️ Configuration",
 ]
 
@@ -656,13 +750,11 @@ def top_nav_bar():
 def main():
     st.markdown("""
     <div class='main-header'>
-        <h1>🤖 AI Stock Analysis Bot</h1>
-        <p>Multi-timeframe scanner • 📈 NIFTY 200 • 🤝 Dhan • 📊 Groww</p>
-        <div class="status-badge">Live • IST</div>
-    </div>
+        <h1>🤖 Intelligent MultiAlgo Multi-timeframe scanner</h1>
+               </div>
     """, unsafe_allow_html=True)
 
-    # Time-based auto scan (no fragment, runs on each script run)
+    # Time-based auto scan (runs whenever script reruns)
     auto_scan_if_due()
 
     top_nav_bar()
@@ -688,30 +780,35 @@ def main():
         st.subheader("🔥 Top 10 Stocks Across All Setups")
         top_recs = get_top_stocks(limit=10)
         render_reco_cards(top_recs, "Top")
+
     elif page == "🌙 BTST":
         st.subheader("🌙 BTST Opportunities")
         recs = st.session_state['recommendations'].get('BTST', [])
         for r in recs:
             r.setdefault("period", "BTST")
         render_reco_cards(recs, "BTST")
+
     elif page == "⚡ Intraday":
         st.subheader("⚡ Intraday Signals")
         recs = st.session_state['recommendations'].get('Intraday', [])
         for r in recs:
             r.setdefault("period", "Intraday")
         render_reco_cards(recs, "Intraday")
+
     elif page == "📆 Weekly":
         st.subheader("📆 Weekly Swing Ideas")
         recs = st.session_state['recommendations'].get('Weekly', [])
         for r in recs:
             r.setdefault("period", "Weekly")
         render_reco_cards(recs, "Weekly")
+
     elif page == "📅 Monthly":
         st.subheader("📅 Monthly Position Trades")
         recs = st.session_state['recommendations'].get('Monthly', [])
         for r in recs:
             r.setdefault("period", "Monthly")
         render_reco_cards(recs, "Monthly")
+
     elif page == "📊 Groww":
         st.subheader("📊 Groww Portfolio Analysis (CSV Upload)")
         st.markdown("Upload your Groww holdings CSV to get instant analytics.")
@@ -746,44 +843,48 @@ def main():
                 st.error(f"Error reading uploaded CSV: {e}")
         else:
             st.info("Choose your Groww CSV to see insights here.")
+
+    elif page == "🤝 Dhan":
+        st.subheader("🤝 Dhan Portfolio")
+        dhan_store = localS.getItem("dhan_config") or {}
+        if dhan_store:
+            st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
+
+        dhan_enable = st.checkbox("Enable Dhan", value=st.session_state.get('dhan_enabled', False))
+        st.session_state['dhan_enabled'] = dhan_enable
+        if dhan_enable:
+            dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''), key="dhan_client_main")
+            dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password", key="dhan_token_main")
+            st.session_state['dhan_client_id'] = dcid
+            st.session_state['dhan_access_token'] = dtoken
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔑 Connect Dhan", use_container_width=True, key="btn_connect_dhan_main"):
+                    dhan_login(dcid, dtoken)
+                    localS.setItem("dhan_config", {"client_id": dcid})
+            with c2:
+                if st.button("🚪 Logout Dhan", use_container_width=True, key="btn_logout_dhan_main"):
+                    dhan_logout()
+            st.caption(st.session_state['dhan_login_msg'])
+
+            df_port, total_pnl = format_dhan_portfolio_table()
+            if df_port is None or df_port.empty:
+                st.info("No Dhan holdings/positions fetched yet.")
+            else:
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.dataframe(df_port, use_container_width=True, hide_index=True)
+                with c2:
+                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                    st.markdown("<h3>Total P&L</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Enable Dhan above to view and refresh your portfolio.")
+
     elif page == "⚙️ Configuration":
         st.markdown("### ⚙️ App Configuration")
-
-        # Dhan after Groww (in overall flow)
-        with st.expander("🤝 Dhan (Connect + Portfolio)", expanded=True):
-            dhan_store = localS.getItem("dhan_config") or {}
-            if dhan_store:
-                st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
-
-            dhan_enable = st.checkbox("Enable Dhan", value=st.session_state.get('dhan_enabled', False))
-            st.session_state['dhan_enabled'] = dhan_enable
-            if dhan_enable:
-                dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''), key="cfg_dhan_client")
-                dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password", key="cfg_dhan_token")
-                st.session_state['dhan_client_id'] = dcid
-                st.session_state['dhan_access_token'] = dtoken
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("🔑 Connect Dhan", use_container_width=True, key="btn_connect_dhan"):
-                        dhan_login(dcid, dtoken)
-                        localS.setItem("dhan_config", {"client_id": dcid})
-                with c2:
-                    if st.button("🚪 Logout Dhan", use_container_width=True, key="btn_logout_dhan"):
-                        dhan_logout()
-                st.caption(st.session_state['dhan_login_msg'])
-
-                df_port, total_pnl = format_dhan_portfolio_table()
-                if df_port is None or df_port.empty:
-                    st.info("No Dhan holdings/positions fetched yet.")
-                else:
-                    c1, c2 = st.columns([3, 1])
-                    with c1:
-                        st.dataframe(df_port, use_container_width=True, hide_index=True)
-                    with c2:
-                        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                        st.markdown("<h3>Total P&L</h3>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
-                        st.markdown("</div>", unsafe_allow_html=True)
 
         with st.expander("📨 Telegram P&L Notifications", expanded=False):
             tg_store = localS.getItem("telegram_config") or {}
