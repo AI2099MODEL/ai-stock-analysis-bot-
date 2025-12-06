@@ -201,14 +201,15 @@ st.markdown("""
     }
 
     .metric-card {
-        padding: 12px 12px;
-        border-radius: 14px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-card);
-        box-shadow: 0 4px 12px rgba(15,23,42,0.18);
-        margin-bottom: 10px;
-        color: #ffffff;
-    }
+    padding: 12px 12px;
+    border-radius: 14px;
+    background: var(--bg-card);
+    border: 1px solid #e5e7eb;    /* <-- change this color */
+    box-shadow: 0 4px 12px rgba(15,23,42,0.18);
+    margin-bottom: 10px;
+    color: #111827;
+}
+
     .metric-card h3 {
         font-size: 0.95rem;
         color: #ffffff;
