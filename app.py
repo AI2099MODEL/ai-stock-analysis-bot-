@@ -14,6 +14,7 @@ except Exception:
 
 # ========= IMPORTS =========
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh  # pip install streamlit-autorefresh
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -69,7 +70,7 @@ def save_config_from_state():
     except Exception as e:
         st.warning(f"Could not save config: {e}")
 
-# ========= PAGE CONFIG & CSS =========
+# ========= PAGE CONFIG & THEME =========
 st.set_page_config(
     page_title="🤖 AI Stock Analysis Bot",
     page_icon="📈",
@@ -77,87 +78,100 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Force white main background + black sidebar using CSS
 st.markdown("""
 <style>
-    body {
-        background: radial-gradient(circle at top left, #1e293b 0, #020617 50%, #0f172a 100%);
-    }
-    .main-header {
-        background: linear-gradient(120deg, #2563eb 0%, #7c3aed 35%, #ec4899 100%);
-        padding: 28px 30px;
-        border-radius: 18px;
-        text-align: center;
-        color: white;
-        margin-bottom: 26px;
-        box-shadow: 0 14px 30px rgba(15,23,42,0.7);
-        border: 1px solid rgba(255,255,255,0.12);
-    }
-    .main-header h1 {
-        margin-bottom: 4px;
-        font-size: 2.1rem;
-    }
-    .main-header p {
-        margin: 0;
-        font-size: 0.95rem;
-        opacity: 0.9;
-    }
-    .status-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        background: rgba(15,23,42,0.4);
-        border: 1px solid rgba(148,163,184,0.6);
-        margin-top: 8px;
-    }
-    .metric-card {
-        padding: 14px 14px;
-        border-radius: 14px;
-        background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
-        border: 1px solid rgba(148,163,184,0.35);
-        box-shadow: 0 10px 30px rgba(15,23,42,0.8);
-    }
-    .metric-card h3 {
-        font-size: 0.9rem;
-        color: #e5e7eb;
-        margin-bottom: 2px;
-    }
-    .metric-card .value {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #f9fafb;
-    }
-    .metric-card .sub {
-        font-size: 0.75rem;
-        color: #9ca3af;
-    }
-    .side-section {
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: linear-gradient(145deg, #020617 0%, #0b1120 100%);
-        border: 1px solid rgba(148,163,184,0.4);
-        margin-bottom: 12px;
-    }
-    .side-section h4 {
-        font-size: 0.85rem;
-        margin-bottom: 8px;
-        color: #e5e7eb;
-    }
-    div[data-testid="stSidebar"] {
-        background: radial-gradient(circle at top, #020617 0, #020617 40%, #0b1120 100%);
-    }
+/* Main app background white */
+[data-testid="stAppViewContainer"] {
+    background-color: #ffffff;
+}
+
+/* Main content padding tweak */
+.block-container {
+    padding-top: 1.5rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+}
+
+/* Sidebar background black */
+[data-testid="stSidebar"] {
+    background-color: #000000;
+}
+
+/* Sidebar text color */
+[data-testid="stSidebar"] * {
+    color: #f1f5f9 !important;
+}
+
+/* Nice header card */
+.main-header {
+    background: linear-gradient(120deg, #2563eb 0%, #7c3aed 40%, #ec4899 100%);
+    padding: 18px 22px;
+    border-radius: 16px;
+    color: white;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 24px rgba(15,23,42,0.5);
+    border: 1px solid rgba(255,255,255,0.15);
+}
+.main-header h1 {
+    margin-bottom: 4px;
+    font-size: 1.8rem;
+}
+.main-header p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* Top-right datetime */
+.top-right-datetime {
+    position: absolute;
+    top: 12px;
+    right: 24px;
+    font-size: 0.9rem;
+    color: #0f172a;
+    background: rgba(248,250,252,0.85);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(148,163,184,0.6);
+    backdrop-filter: blur(6px);
+}
+
+/* Metric card */
+.metric-card {
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+    border: 1px solid rgba(148,163,184,0.35);
+    box-shadow: 0 10px 30px rgba(15,23,42,0.8);
+}
+
+/* Sidebar section container */
+.side-section {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #020617;
+    border: 1px solid rgba(148,163,184,0.5);
+    margin-bottom: 12px;
+}
+.side-section h4 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    color: #e5e7eb;
+}
 </style>
 """, unsafe_allow_html=True)
 
 IST = pytz.timezone('Asia/Kolkata')
 
+# ========= AUTO-REFRESH (1 SECOND) =========
+# This re-runs the script every 1000ms without crashing the app. [web:217]
+st_autorefresh(interval=1000, key="nifty_sensex_autorefresh")
+
 # ========= LOAD CONFIG & SESSION STATE =========
 _cfg = load_config()
 localS = LocalStorage()  # browser localStorage manager
 
-# Server-side base state
 if 'last_analysis_time' not in st.session_state:
     st.session_state['last_analysis_time'] = None
 if 'recommendations' not in st.session_state:
@@ -165,7 +179,6 @@ if 'recommendations' not in st.session_state:
 if 'portfolio_results' not in st.session_state:
     st.session_state['portfolio_results'] = None
 
-# Dhan state
 for key, default in [
     ('dhan_enabled', False),
     ('dhan_client_id', _cfg.get('dhan_client_id', '')),
@@ -177,7 +190,6 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Notification / Telegram state
 for key, default in [
     ('notify_enabled', _cfg.get('notify_enabled', False)),
     ('telegram_bot_token', _cfg.get('telegram_bot_token', '')),
@@ -620,14 +632,14 @@ def get_index_quote(symbol: str):
 
 # ========= MAIN UI =========
 def main():
-    # auto-refresh every 1 second
-    st.experimental_set_query_params(_=datetime.now().timestamp())
+    # Top-right IST datetime
+    now_ist = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
+    st.markdown(f"<div class='top-right-datetime'>🕒 IST: {now_ist}</div>", unsafe_allow_html=True)
 
     st.markdown("""
     <div class='main-header'>
         <h1>🤖 AI Stock Analysis Bot</h1>
         <p>Multi-timeframe scanner + Dhan + deep portfolio analyzer</p>
-        <div class="status-badge">Live • IST</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -653,10 +665,9 @@ def main():
 
     # ===== Sidebar: Live Market + Top 5 BTST =====
     with st.sidebar:
-        # Live market status
         st.markdown("<div class='side-section'><h4>📈 Market Live</h4>", unsafe_allow_html=True)
-        n_price, n_chg = get_index_quote("^NSEI")   # Nifty 50
-        s_price, s_chg = get_index_quote("^BSESN")  # Sensex
+        n_price, n_chg = get_index_quote("^NSEI")
+        s_price, s_chg = get_index_quote("^BSESN")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -669,10 +680,9 @@ def main():
                 st.metric("Sensex", f"{s_price:,.0f}", f"{s_chg:.2f}%")
             else:
                 st.metric("Sensex", "--", "--")
-        st.caption("Auto-refresh approx. every second.")
+        st.caption("Auto-refresh every second.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Top 5 BTST recommendations
         st.markdown("<div class='side-section'><h4>⭐ Top 5 BTST</h4>", unsafe_allow_html=True)
         btst_recs = st.session_state['recommendations'].get('BTST', []) or []
         if btst_recs:
@@ -690,7 +700,6 @@ def main():
             st.caption("Run Full Scan to see BTST picks.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Last analysis info
         st.markdown("<div class='side-section'><h4>⏱ Status</h4>", unsafe_allow_html=True)
         if st.session_state['last_analysis_time']:
             st.caption(f"Last Analysis: {st.session_state['last_analysis_time'].strftime('%I:%M %p')}")
@@ -703,21 +712,18 @@ def main():
     with c1:
         if st.button("🚀 Run Full Scan", type="primary", use_container_width=True):
             run_analysis()
-            st.experimental_rerun()
     with c2:
-        if st.button("🔄 Refresh Page", use_container_width=True):
-            st.experimental_rerun()
+        if st.button("🔄 Manual Refresh", use_container_width=True):
+            st.experimental_rerun()  # safe for explicit button press only
     with c3:
         st.metric("Universe", len(STOCK_UNIVERSE))
 
     st.markdown("---")
 
-    # ===== Tabs =====
     tab_btst, tab_intraday, tab_weekly, tab_monthly, tab_portfolio, tab_csv, tab_config = st.tabs(
         ["🌙 Top 5 BTST", "⚡ Intraday", "📆 Weekly", "📅 Monthly", "📊 Portfolio", "📂 CSV Analyzer", "⚙️ Configuration"]
     )
 
-    # --- Top 5 BTST tab ---
     with tab_btst:
         btst_recs = st.session_state['recommendations'].get('BTST', [])
         st.subheader("Top BTST Opportunities")
@@ -731,7 +737,6 @@ def main():
                 use_container_width=True
             )
 
-    # --- Intraday tab ---
     with tab_intraday:
         intraday_recs = st.session_state['recommendations'].get('Intraday', [])
         st.subheader("Intraday Signals")
@@ -741,7 +746,6 @@ def main():
             df = pd.DataFrame(intraday_recs)
             st.dataframe(df, use_container_width=True)
 
-    # --- Weekly tab ---
     with tab_weekly:
         weekly_recs = st.session_state['recommendations'].get('Weekly', [])
         st.subheader("Weekly Swing Ideas")
@@ -751,7 +755,6 @@ def main():
             df = pd.DataFrame(weekly_recs)
             st.dataframe(df, use_container_width=True)
 
-    # --- Monthly tab ---
     with tab_monthly:
         monthly_recs = st.session_state['recommendations'].get('Monthly', [])
         st.subheader("Monthly Position Trades")
@@ -761,7 +764,6 @@ def main():
             df = pd.DataFrame(monthly_recs)
             st.dataframe(df, use_container_width=True)
 
-    # --- Portfolio tab (Dhan) ---
     with tab_portfolio:
         st.subheader("Portfolio (Dhan)")
         df_port, total_pnl = format_dhan_portfolio_table()
@@ -773,16 +775,14 @@ def main():
                 st.dataframe(df_port, use_container_width=True)
             with c2:
                 st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.markdown("<h3>Total P&L</h3>", unsafe_allow_html=True)
-                st.markdown(f"<div class='value'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
+                st.markdown("<h3 style='color:#e5e7eb;'>Total P&L</h3>", unsafe_allow_html=True)
+                st.markdown(f"<div class='value' style='color:#f9fafb;font-size:1.3rem;'>₹{total_pnl:,.2f}</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- CSV Analyzer tab ---
     with tab_csv:
         st.subheader("CSV Portfolio Analyzer")
-        st.write("Integrate your existing CSV analyzer UI here (functions unchanged from previous version).")
+        st.write("Integrate your CSV analysis UI here.")
 
-    # --- Configuration tab ---
     with tab_config:
         st.subheader("Configuration")
 
