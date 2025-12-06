@@ -230,14 +230,15 @@ st.markdown("""
         gap: 6px;
         margin-top: 4px;
     }
-    .chip {
+        .chip {
         padding: 2px 8px;
         border-radius: 999px;
         font-size: 0.7rem;
-        background: rgba(37,99,235,0.08);      /* soft indigo */
-        border: 1px solid rgba(129,140,248,0.5);
-        color: #1f2933;
+        background: #ffffff;                 /* white chip */
+        border: 1px solid #d1d5db;          /* light gray border */
+        color: #111827;                     /* dark text */
     }
+
 
     /* Tables & dataframe tweaks */
     .stDataFrame, .stTable {
