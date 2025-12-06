@@ -81,13 +81,14 @@ st.set_page_config(
 # Force white main background + black sidebar using CSS
 st.markdown("""
 <style>
-/* Main app background white */
+/* Whole app dark */
 [data-testid="stAppViewContainer"] {
-    background-color: #ffffff;
+    background-color: #020617;  /* near-black */
 }
 
-/* Main content padding tweak */
+/* Main content area slightly lighter */
 .block-container {
+    background-color: #020617;
     padding-top: 1.5rem;
     padding-left: 1.5rem;
     padding-right: 1.5rem;
@@ -98,20 +99,25 @@ st.markdown("""
     background-color: #000000;
 }
 
-/* Sidebar text color */
+/* Sidebar text light */
 [data-testid="stSidebar"] * {
-    color: #f1f5f9 !important;
+    color: #e5e7eb !important;
 }
 
-/* Nice header card */
+/* Main body text light */
+[data-testid="stAppViewContainer"] * {
+    color: #e5e7eb;
+}
+
+/* Header card */
 .main-header {
     background: linear-gradient(120deg, #2563eb 0%, #7c3aed 40%, #ec4899 100%);
     padding: 18px 22px;
     border-radius: 16px;
     color: white;
     margin-bottom: 20px;
-    box-shadow: 0 10px 24px rgba(15,23,42,0.5);
-    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 10px 24px rgba(15,23,42,0.7);
+    border: 1px solid rgba(255,255,255,0.18);
 }
 .main-header h1 {
     margin-bottom: 4px;
@@ -123,27 +129,27 @@ st.markdown("""
     opacity: 0.9;
 }
 
-/* Top-right datetime */
+/* Top-right IST datetime chip */
 .top-right-datetime {
     position: absolute;
     top: 12px;
     right: 24px;
     font-size: 0.9rem;
-    color: #0f172a;
-    background: rgba(248,250,252,0.85);
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.9);
     padding: 6px 12px;
     border-radius: 999px;
-    border: 1px solid rgba(148,163,184,0.6);
+    border: 1px solid rgba(148,163,184,0.7);
     backdrop-filter: blur(6px);
 }
 
-/* Metric card */
+/* Metric cards (used in portfolio P&L) */
 .metric-card {
     padding: 10px 12px;
     border-radius: 14px;
     background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
     border: 1px solid rgba(148,163,184,0.35);
-    box-shadow: 0 10px 30px rgba(15,23,42,0.8);
+    box-shadow: 0 10px 30px rgba(15,23,42,0.9);
 }
 
 /* Sidebar section container */
@@ -161,6 +167,7 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 IST = pytz.timezone('Asia/Kolkata')
 
