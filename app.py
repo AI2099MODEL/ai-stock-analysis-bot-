@@ -90,7 +90,7 @@ st.markdown("""
     .chip { padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; background: #ffffff; border: 1px solid #d1d5db; color: #111827; }
     .st-key-refresh_btn button { background-color: #f97316 !important; color: #ffffff !important; border-color: #ea580c !important; }
     .st-key-refresh_btn button:hover { background-color: #ea580c !important; }
-    
+
     /* File uploader dark button with light font */
     div[data-testid="stFileUploader"] section button {
         background-color: #1e293b !important; color: #f8fafc !important;
@@ -99,8 +99,8 @@ st.markdown("""
     div[data-testid="stFileUploader"] section button:hover {
         background-color: #334155 !important; color: #ffffff !important;
     }
-    
-    /* Auto Calculate button dark with light font */
+
+    /* Auto Calculate button (if used) */
     .st-key-btn_auto_calc button {
         background-color: #1e293b !important; color: #f8fafc !important;
         border-color: #334155 !important; font-weight: 500 !important;
@@ -127,7 +127,7 @@ st.markdown("""
     .dark-table {
         width: 100%;
         border-collapse: collapse;
-        background-color: #020617; /* almost black */
+        background-color: #020617;
         color: #f9fafb;
         border-radius: 12px;
         overflow: hidden;
@@ -166,7 +166,7 @@ for key, default in [
     ('telegram_bot_token', _cfg.get('telegram_bot_token', '')),
     ('telegram_chat_id', _cfg.get('telegram_chat_id', '')),
     ('last_pnl_notify', None),
-    ('last_reco_notify', {}),   # 🔔 track last recommendation sends per slot
+    ('last_reco_notify', {}),   # track last recommendation sends per slot
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -270,7 +270,7 @@ def format_dhan_portfolio_table():
         h_df['_pnl'] = h_df['_total_price'] - h_df['_total_cost']
         portfolio = h_df[['_name', '_qty', '_avg', '_total_cost', '_cmp', '_total_price', '_pnl']].rename(
             columns={'_name': 'Stock', '_qty': 'Quantity', '_avg': 'Avg Cost', '_total_cost': 'Total Cost',
-                    '_cmp': 'CMP', '_total_price': 'Total Value', '_pnl': 'P&L'}
+                     '_cmp': 'CMP', '_total_price': 'Total Value', '_pnl': 'P&L'}
         )
     else:
         name_col = next((c for c in ['tradingSymbol', 'securityName', 'symbol'] if c in p_df.columns), None)
@@ -283,7 +283,7 @@ def format_dhan_portfolio_table():
         p_df['_pnl'] = p_df['_total_price'] - p_df['_total_cost']
         portfolio = p_df[['_name', '_qty', '_avg', '_total_cost', '_cmp', '_total_price', '_pnl']].rename(
             columns={'_name': 'Stock', '_qty': 'Quantity', '_avg': 'Avg Cost', '_total_cost': 'Total Cost',
-                    '_cmp': 'CMP', '_total_price': 'Total Value', '_pnl': 'P&L'}
+                     '_cmp': 'CMP', '_total_price': 'Total Value', '_pnl': 'P&L'}
         )
     total_pnl = float(portfolio['P&L'].fillna(0).sum())
     return portfolio, total_pnl
@@ -535,14 +535,11 @@ def project_value(current_value: float, cagr: float, yearly_dividend: float, yea
     future += yearly_dividend * years
     return float(future)
 
-# ---------- 🔔 TELEGRAM RECOMMENDATION SCHEDULER ----------
+# ---------- TELEGRAM RECOMMENDATION SCHEDULER ----------
 
 NOTIFY_SLOTS = ["09:30", "13:30", "15:00"]  # IST slots
 
 def build_telegram_reco_message(now: datetime) -> str:
-    """
-    Build a compact Telegram message with top recommendations per segment.
-    """
     lines = []
     lines.append("📊 Auto Stock Ideas (NIFTY 200)")
     lines.append(f"🕒 {now.strftime('%d-%m-%Y %H:%M')} IST")
@@ -571,26 +568,17 @@ def build_telegram_reco_message(now: datetime) -> str:
     return "\n".join(lines)
 
 def send_scheduled_recommendations(now: datetime):
-    """
-    Ensure recommendations exist, then send via Telegram.
-    """
     if not st.session_state.get("notify_enabled", False):
         return
-
     recs = st.session_state.get("recommendations", {})
     if not any(recs.get(k) for k in ['BTST', 'Intraday', 'Weekly', 'Monthly']):
         run_analysis()
-
     msg = build_telegram_reco_message(now)
     send_telegram_message(msg)
     st.caption("📤 Telegram recommendations sent.")
     st.session_state['last_pnl_notify'] = now
 
 def handle_scheduled_notifications(now: datetime):
-    """
-    Check if current time matches any slot (09:30, 13:30, 15:00 IST)
-    and send recommendations once per slot per day.
-    """
     if not st.session_state.get("notify_enabled", False):
         return
 
@@ -600,10 +588,8 @@ def handle_scheduled_notifications(now: datetime):
     for slot in NOTIFY_SLOTS:
         hr, mn = map(int, slot.split(":"))
         scheduled_dt = now.replace(hour=hr, minute=mn, second=0, microsecond=0)
-
         window_start = scheduled_dt
         window_end = scheduled_dt.replace(minute=scheduled_dt.minute + 5)
-
         already_sent_today = last_map.get(slot) == today_str
 
         if (now >= window_start) and (now <= window_end) and not already_sent_today:
@@ -627,7 +613,6 @@ def auto_scan_if_due():
         if should_run:
             run_analysis()
             st.caption(f"🕒 Auto-scan executed at {now.strftime('%H:%M:%S')} IST")
-
     handle_scheduled_notifications(now)
 
 def get_top_stocks(limit: int = 10):
@@ -695,7 +680,6 @@ def map_groww_columns(df: pd.DataFrame):
         return None, msg
     return out, None
 
-
 def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
     sym = stock_name.split()[0].upper().strip() if stock_name else ""
     yf_ticker = NIFTY_YF_MAP.get(sym, None)
@@ -725,15 +709,22 @@ def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
     return float(div_yield), float(div_rupees), float(cagr)
 
 def classify_strength(pct_pnl: float, cagr: float, price_zero: bool) -> str:
+    """
+    Strength buckets for Groww AI analysis:
+    Super Strong / Strong / Medium / Weak / Super Weak
+    """
     if price_zero:
         return "Super Strong"
+    # CAGR is decimal (0.15 = 15)
     if cagr >= 0.15 and pct_pnl >= 20:
         return "Super Strong"
     if cagr >= 0.10 and pct_pnl >= 0:
         return "Strong"
-    if cagr >= 0.05 or pct_pnl > -15:
+    if cagr >= 0.05 or pct_pnl > -10:
         return "Medium"
-    return "Sell"
+    if cagr >= 0.0 or pct_pnl > -30:
+        return "Weak"
+    return "Super Weak"
 
 def get_recommendation(pct_pnl: float, cagr: float, price_zero: bool) -> str:
     strength = classify_strength(pct_pnl, cagr, price_zero)
@@ -749,7 +740,6 @@ def suggest_horizon(strength: str, div_yield: float, cagr: float) -> str:
     AI-style heuristic for how long to hold:
     uses growth (CAGR) + dividend profile + strength bucket.
     """
-    # cagr is decimal (0.12 = 12%)
     if strength == "Super Strong":
         if div_yield >= 0.015 or cagr >= 0.18:
             return "Hold 20+ years (core compounding)"
@@ -762,10 +752,12 @@ def suggest_horizon(strength: str, div_yield: float, cagr: float) -> str:
         if cagr >= 0.08:
             return "Hold 5–7 years"
         return "Review in 3–5 years"
-    # Sell bucket
-    if cagr <= 0:
-        return "Exit within 1–2 years; switch to better compounder"
-    return "Tactical hold; reassess within 1–2 years"
+    if strength == "Weak":
+        if cagr > 0:
+            return "Tactical hold; reassess within 1–2 years"
+        return "Exit gradually over 1–2 years"
+    # Super Weak
+    return "Exit within 6–12 months; rotate to better compounders"
 
 def render_reco_cards(recs: List[Dict], label: str):
     if not recs:
@@ -822,35 +814,41 @@ def main():
         st.subheader("🔥 Top Stocks (up to 20)")
         top_recs = get_top_stocks(limit=20)
         render_reco_cards(top_recs, "Top")
+
     elif page == "🌙 BTST":
         st.subheader("🌙 BTST Opportunities")
         recs = st.session_state['recommendations'].get('BTST', [])
         for r in recs:
             r.setdefault("period", "BTST")
         render_reco_cards(recs, "BTST")
+
     elif page == "⚡ Intraday":
         st.subheader("⚡ Intraday Signals")
         recs = st.session_state['recommendations'].get('Intraday', [])
         for r in recs:
             r.setdefault("period", "Intraday")
         render_reco_cards(recs, "Intraday")
+
     elif page == "📆 Weekly":
         st.subheader("📆 Weekly Swing Ideas")
         recs = st.session_state['recommendations'].get('Weekly', [])
         for r in recs:
             r.setdefault("period", "Weekly")
         render_reco_cards(recs, "Weekly")
+
     elif page == "📅 Monthly":
         st.subheader("📅 Monthly Position Trades")
         recs = st.session_state['recommendations'].get('Monthly', [])
         for r in recs:
             r.setdefault("period", "Monthly")
         render_reco_cards(recs, "Monthly")
+
     elif page == "📊 Groww":
         st.subheader("📊 Groww Portfolio Analysis (CSV / Excel Upload)")
         st.markdown("Upload your Groww holdings file (CSV/XLS/XLSX) to get advanced analytics with all values in ₹ INR.")
         st.code("Stock Name\tISIN\tQuantity\tAverage buy price per share\tTotal Investment\tTotal CMP\tTOTAL P&L", language="text")
         uploaded = st.file_uploader("Upload Groww portfolio file", type=["csv", "xls", "xlsx"], key="groww_file_upload")
+
         if uploaded is not None:
             df_up = load_groww_file(uploaded)
             if df_up.empty:
@@ -860,6 +858,7 @@ def main():
                 st.error(err)
                 st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
                 st.stop()
+
             st.write("🔍 Raw preview:")
             st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
 
@@ -958,23 +957,25 @@ def main():
             proj_df = pd.DataFrame(proj_data)
             st.markdown(proj_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
 
-            # 🤖 AI recommendations BEFORE recalc section
-            st.markdown("### 🤖 AI Long-Term Recommendations (20-year mindset)")
+            # 🤖 AI Analysis – strength buckets (replaces adjust/recalc table)
+            st.markdown("### 🤖 AI Analysis – Strength Buckets for 20-Year Investing")
             st.write(
-                "Based on each company’s **price growth (CAGR)**, **dividend yield** and your current P&L, "
-                "these suggestions tell you whether to keep the stock for **20+ years, 10–15 years, or review/exit sooner**."
+                "Each stock is classified into **Super Strong, Strong, Medium, Weak, Super Weak** "
+                "based on long-term **CAGR**, **dividend yield** and your **P&L**. "
+                "Use this to decide which stocks deserve a 20-year seat in your portfolio."
             )
-            reco_cols = [
+
+            base_cols = [
                 cols["stock name"],
-                "Strength",
-                "Recommendation",
-                "Suggested Horizon","_inv",
+                "_inv",
                 "_cmp_total",
                 "_pnl",
                 "Dividend Yield",
                 "CAGR (%)",
+                "Recommendation",
+                "Suggested Horizon",
             ]
-            df_reco = df[reco_cols].rename(columns={
+            df_reco = df[base_cols + ["Strength"]].rename(columns={
                 cols["stock name"]: "Stock Name",
                 "_inv": "Total Investment (₹)",
                 "_cmp_total": "Total CMP (₹)",
@@ -982,111 +983,25 @@ def main():
                 "Dividend Yield": "Dividend Yield (ratio)",
                 "CAGR (%)": "CAGR (%)",
             })
-            st.dataframe(df_reco, use_container_width=True, hide_index=True)
 
-            st.markdown("### 🛠 Adjust Portfolio & Recalculate")
-            st.write("Adjust quantities, CMP, CAGR, and dividend per share, then click **Auto Calculate**.")
-            editable_cols = [cols["stock name"], cols["quantity"], cols["total investment"], cols["total cmp"], "Dividend/Share (₹)", "CAGR (%)"]
-            edit_df = df[editable_cols].copy()
-            edit_df = st.data_editor(edit_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="groww_edit_table")
+            bucket_info = [
+                ("Super Strong", "🌟 Core compounders for 15–20+ years"),
+                ("Strong", "✅ Quality holdings for 7–15 years"),
+                ("Medium", "🟡 Hold with review in 3–7 years"),
+                ("Weak", "⚠️ Risky / average – reassess soon"),
+                ("Super Weak", "❌ Exit candidates – capital can be better used"),
+            ]
 
-            if st.button("⚙️ Auto Calculate", use_container_width=True, key="btn_auto_calc"):
-                df2 = edit_df.copy()
-                df2["_qty"] = pd.to_numeric(df2[cols["quantity"]], errors="coerce").fillna(0.0)
-                df2["_inv"] = pd.to_numeric(df2[cols["total investment"]], errors="coerce").fillna(0.0)
-                df2["_cmp_total"] = pd.to_numeric(df2[cols["total cmp"]], errors="coerce").fillna(0.0)
-                df2["Dividend/Share (₹)"] = pd.to_numeric(df2["Dividend/Share (₹)"], errors="coerce").fillna(0.0)
-                df2["CAGR (%)"] = pd.to_numeric(df2["CAGR (%)"], errors="coerce").fillna(5.0)
-                df2["CAGR (decimal)"] = df2["CAGR (%)"] / 100.0
-                df2["_pnl"] = df2["_cmp_total"] - df2["_inv"]
-                df2["_cmp_per_share"] = np.where(df2["_qty"] > 0, df2["_cmp_total"] / df2["_qty"], 0.0)
+            for bucket, desc in bucket_info:
+                sub = df_reco[df_reco["Strength"] == bucket]
+                if sub.empty:
+                    continue
+                st.markdown(f"#### {bucket} — {desc}")
+                st.dataframe(sub.drop(columns=["Strength"]), use_container_width=True, hide_index=True)
 
-                strengths, recommendations, horizons = [], [], []
-                for _, r in df2.iterrows():
-                    inv2 = float(r["_inv"])
-                    cur2 = float(r["_cmp_total"])
-                    pct_pnl2 = ((cur2 - inv2) / inv2 * 100.0) if inv2 > 0 else 0.0
-                    is_zero_price2 = float(r["_cmp_per_share"]) <= 0.0
-                    strength = classify_strength(pct_pnl2, float(r["CAGR (decimal)"]), is_zero_price2)
-                    recommendation = get_recommendation(pct_pnl2, float(r["CAGR (decimal)"]), is_zero_price2)
-                    horizon = suggest_horizon(strength, 0.0, float(r["CAGR (decimal)"]))  # dividend unknown here, use CAGR
-                    strengths.append(strength)
-                    recommendations.append(recommendation)
-                    horizons.append(horizon)
-
-                df2["Strength"] = strengths
-                df2["Recommendation"] = recommendations
-                df2["Suggested Horizon"] = horizons
-                df2["Yearly Dividend (₹)"] = df2["Dividend/Share (₹)"] * df2["_qty"]
-
-                total_inv2 = float(df2["_inv"].sum())
-                total_cmp_val2 = float(df2["_cmp_total"].sum())
-                total_pnl2 = float(df2["_pnl"].sum())
-                total_yearly_div2 = float(df2["Yearly Dividend (₹)"].sum())
-
-                if total_cmp_val2 > 0:
-                    df2["_weight"] = df2["_cmp_total"] / total_cmp_val2
-                    portfolio_cagr2 = float((df2["CAGR (decimal)"] * df2["_weight"]).sum())
-                else:
-                    portfolio_cagr2 = 0.05
-
-                st.markdown("#### 🔁 Recalculated Snapshot (All values in ₹ INR)")
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Total Investment", f"₹{total_inv2:,.2f}")
-                with c2:
-                    st.metric("Current Value", f"₹{total_cmp_val2:,.2f}")
-                with c3:
-                    st.metric("Total P&L", f"₹{total_pnl2:,.2f}")
-
-                snap2_data = [
-                    {"Metric": "Total Investment", "Value": f"₹{total_inv2:,.2f}"},
-                    {"Metric": "Current Value", "Value": f"₹{total_cmp_val2:,.2f}"},
-                    {"Metric": "Total P&L", "Value": f"₹{total_pnl2:,.2f}"},
-                    {"Metric": "Yearly Dividend", "Value": f"₹{total_yearly_div2:,.2f}"},
-                ]
-                snap2_df = pd.DataFrame(snap2_data)
-                st.markdown(snap2_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
-
-                st.markdown("#### 🔮 Updated Projections")
-                proj2 = []
-                for y in years_list:
-                    v2 = project_value(total_cmp_val2, portfolio_cagr2, total_yearly_div2, y)
-                    capital_gain2 = v2 - total_cmp_val2 - (total_yearly_div2 * y)
-                    proj2.append({
-                        "Years": y,
-                        "Current Value": fmt_lakhs(total_cmp_val2),
-                        "Total Dividends": fmt_lakhs(total_yearly_div2 * y),
-                        "Capital Gain": fmt_lakhs(capital_gain2),
-                        "Projected Value": fmt_lakhs(v2)
-                    })
-                proj2_df = pd.DataFrame(proj2)
-                st.markdown(proj2_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
-
-                st.markdown("#### 📋 Detailed Results with Recommendations (₹ INR)")
-                show_cols = [
-                    cols["stock name"],
-                    cols["quantity"],
-                    cols["total investment"],
-                    cols["total cmp"],
-                    "_pnl",
-                    "Dividend/Share (₹)",
-                    "Yearly Dividend (₹)",
-                    "CAGR (%)",
-                    "Strength",
-                    "Recommendation",
-                    "Suggested Horizon",
-                ]
-                df_show = df2[show_cols].rename(columns={
-                    cols["stock name"]: "Stock Name",
-                    cols["quantity"]: "Quantity",
-                    cols["total investment"]: "Total Investment (₹)",
-                    cols["total cmp"]: "Total CMP (₹)",
-                    "_pnl": "Total P&L (₹)",
-                })
-                st.dataframe(df_show, use_container_width=True, hide_index=True)
         else:
             st.info("Choose your Groww CSV/XLS/XLSX file to see advanced insights here.")
+
     elif page == "🤝 Dhan":
         st.subheader("🤝 Dhan Portfolio")
         dhan_store = localS.getItem("dhan_config") or {}
@@ -1116,9 +1031,14 @@ def main():
                 with c1:
                     st.dataframe(df_port, use_container_width=True, hide_index=True)
                 with c2:
-                    st.markdown("<div class='metric-card'><h3>Total P&L</h3><div class='value'>₹{:,.2f}</div></div>".format(total_pnl), unsafe_allow_html=True)
+                    st.markdown(
+                        "<div class='metric-card'><h3>Total P&L</h3>"
+                        "<div class='value'>₹{:,.2f}</div></div>".format(total_pnl),
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("Enable Dhan above to view and refresh your portfolio.")
+
     elif page == "⚙️ Configuration":
         st.markdown("### ⚙️ App Configuration")
         with st.expander("📨 Telegram P&L Notifications", expanded=False):
@@ -1126,7 +1046,11 @@ def main():
             if tg_store:
                 st.session_state['telegram_bot_token'] = tg_store.get("bot_token", st.session_state['telegram_bot_token'])
                 st.session_state['telegram_chat_id'] = tg_store.get("chat_id", st.session_state['telegram_chat_id'])
-            notify_toggle = st.checkbox("Enable P&L notifications (30 min) & auto recommendations", value=st.session_state['notify_enabled'], key="cfg_notify_toggle")
+            notify_toggle = st.checkbox(
+                "Enable P&L notifications (30 min) & auto recommendations",
+                value=st.session_state['notify_enabled'],
+                key="cfg_notify_toggle",
+            )
             st.session_state['notify_enabled'] = notify_toggle
             tg_token = st.text_input("Bot Token", value=st.session_state['telegram_bot_token'], key="cfg_tg_token")
             tg_chat = st.text_input("Chat ID", value=st.session_state['telegram_chat_id'], key="cfg_tg_chat")
