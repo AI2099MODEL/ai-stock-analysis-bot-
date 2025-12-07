@@ -108,6 +108,28 @@ st.markdown("""
     .st-key-btn_auto_calc button:hover {
         background-color: #334155 !important; color: #ffffff !important;
     }
+
+    /* 🔳 Dark table for portfolio snapshot & projections */
+    .dark-table {
+        width: 100%;
+        border-collapse: collapse;
+        background-color: #020617; /* almost black */
+        color: #f9fafb;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    }
+    .dark-table th, .dark-table td {
+        padding: 8px 10px;
+        border: 1px solid #1f2937;
+        font-size: 0.85rem;
+    }
+    .dark-table th {
+        background-color: #111827;
+        font-weight: 600;
+        text-align: left;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -760,13 +782,23 @@ def main():
                 st.metric("Current Value", f"₹{total_cmp_val:,.2f}")
             with c3:
                 st.metric("Total P&L", f"₹{total_pnl:,.2f}")
+            # 🔳 Black background snapshot table
+            snap_data = [
+                {"Metric": "Total Investment", "Value": f"₹{total_inv:,.2f}"},
+                {"Metric": "Current Value", "Value": f"₹{total_cmp_val:,.2f}"},
+                {"Metric": "Total P&L", "Value": f"₹{total_pnl:,.2f}"},
+                {"Metric": "Yearly Dividend", "Value": f"₹{total_yearly_div:,.2f}"},
+            ]
+            snap_df = pd.DataFrame(snap_data)
+            st.markdown(snap_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
+
             if total_cmp_val > 0:
                 df["_weight"] = df["_cmp_total"] / total_cmp_val
                 portfolio_cagr = float((df["CAGR (decimal)"] * df["_weight"]).sum())
             else:
                 portfolio_cagr = 0.05
             st.markdown("#### 🔮 Portfolio Value Projections")
-            st.markdown("*Based on weighted CAGR and total yearly dividend. All values in ₹ INR.*")
+            st.markdown("*Based on weighted CAGR and total yearly dividend. All values shown in Lakhs.*")
             years_list = [1, 5, 10, 15, 20]
             proj_data = []
             for y in years_list:
@@ -774,12 +806,14 @@ def main():
                 capital_gain = v - total_cmp_val - (total_yearly_div * y)
                 proj_data.append({
                     "Years": y,
-                    "Current Value (₹)": fmt_lakhs(total_cmp_val),
-                    "Total Dividends (₹)": fmt_lakhs(total_yearly_div * y),
-                    "Capital Gain (₹)": fmt_lakhs(capital_gain),
-                    "Projected Value (₹)": fmt_lakhs(v)
+                    "Current Value": fmt_lakhs(total_cmp_val),
+                    "Total Dividends": fmt_lakhs(total_yearly_div * y),
+                    "Capital Gain": fmt_lakhs(capital_gain),
+                    "Projected Value": fmt_lakhs(v)
                 })
-            st.table(pd.DataFrame(proj_data))
+            proj_df = pd.DataFrame(proj_data)
+            st.markdown(proj_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
+
             st.markdown("### 🛠 Adjust Portfolio & Recalculate")
             st.write("Adjust quantities, CMP, CAGR, and dividend per share, then click **Auto Calculate**.")
             editable_cols = [cols["stock name"], cols["quantity"], cols["total investment"], cols["total cmp"], "Dividend/Share (₹)", "CAGR (%)"]
@@ -825,6 +859,16 @@ def main():
                     st.metric("Current Value", f"₹{total_cmp_val2:,.2f}")
                 with c3:
                     st.metric("Total P&L", f"₹{total_pnl2:,.2f}")
+                # 🔳 Black background recalculated snapshot table
+                snap2_data = [
+                    {"Metric": "Total Investment", "Value": f"₹{total_inv2:,.2f}"},
+                    {"Metric": "Current Value", "Value": f"₹{total_cmp_val2:,.2f}"},
+                    {"Metric": "Total P&L", "Value": f"₹{total_pnl2:,.2f}"},
+                    {"Metric": "Yearly Dividend", "Value": f"₹{total_yearly_div2:,.2f}"},
+                ]
+                snap2_df = pd.DataFrame(snap2_data)
+                st.markdown(snap2_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
+
                 st.markdown("#### 🔮 Updated Projections")
                 proj2 = []
                 for y in years_list:
@@ -832,12 +876,14 @@ def main():
                     capital_gain2 = v2 - total_cmp_val2 - (total_yearly_div2 * y)
                     proj2.append({
                         "Years": y,
-                        "Current Value (₹)": fmt_lakhs(total_cmp_val2),
-                        "Total Dividends (₹)": fmt_lakhs(total_yearly_div2 * y),
-                        "Capital Gain (₹)": fmt_lakhs(capital_gain2),
-                        "Projected Value (₹)": fmt_lakhs(v2)
+                        "Current Value": fmt_lakhs(total_cmp_val2),
+                        "Total Dividends": fmt_lakhs(total_yearly_div2 * y),
+                        "Capital Gain": fmt_lakhs(capital_gain2),
+                        "Projected Value": fmt_lakhs(v2)
                     })
-                st.table(pd.DataFrame(proj2))
+                proj2_df = pd.DataFrame(proj2)
+                st.markdown(proj2_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
+
                 st.markdown("#### 📋 Detailed Results with Recommendations (₹ INR)")
                 show_cols = [cols["stock name"], cols["quantity"], cols["total investment"], cols["total cmp"], "_pnl", "Dividend/Share (₹)", "Yearly Dividend (₹)", "CAGR (%)", "Strength", "Recommendation"]
                 df_show = df2[show_cols].rename(columns={cols["stock name"]: "Stock Name", cols["quantity"]: "Quantity", cols["total investment"]: "Total Investment (₹)", cols["total cmp"]: "Total CMP (₹)", "_pnl": "Total P&L (₹)"})
