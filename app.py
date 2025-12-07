@@ -61,7 +61,7 @@ def save_config_from_state():
     except Exception as e:
         st.warning(f"Could not save config: {e}")
 
-st.set_page_config(page_title="🤖 AI Stock Analysis Bot", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="🤖 AI Algorithms Bot", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
