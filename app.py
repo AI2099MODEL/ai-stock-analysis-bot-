@@ -727,7 +727,7 @@ def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
 
     div_yield = 0.0
     div_rupees = 0.0
-    cagr = 0.05  # default 5%
+    cagr = 0.02  # default 5%
 
     if not yf_ticker:
         return div_yield, div_rupees, cagr
