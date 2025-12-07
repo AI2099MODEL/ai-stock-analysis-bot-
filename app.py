@@ -1,4 +1,4 @@
-# Complete Stock Analysis Bot - ONLY GROWW PAGE MODIFIED
+# Complete Stock Analysis Bot - ONLY GROWW & DHAN & CONFIG PAGES MODIFIED
 # All other pages remain exactly as original
 
 import subprocess, sys
@@ -100,7 +100,6 @@ st.markdown("""
         background-color: #334155 !important; color: #ffffff !important;
     }
 
-    /* Auto Calculate button (if used) */
     .st-key-btn_auto_calc button {
         background-color: #1e293b !important; color: #f8fafc !important;
         border-color: #334155 !important; font-weight: 500 !important;
@@ -123,7 +122,7 @@ st.markdown("""
         color: #e5f3ff !important;
     }
 
-    /* 🔳 Dark table for portfolio snapshot & projections */
+    /* 🔳 Dark table for portfolio snapshot, projections, config */
     .dark-table {
         width: 100%;
         border-collapse: collapse;
@@ -715,7 +714,6 @@ def classify_strength(pct_pnl: float, cagr: float, price_zero: bool) -> str:
     """
     if price_zero:
         return "Super Strong"
-    # CAGR is decimal (0.15 = 15)
     if cagr >= 0.15 and pct_pnl >= 20:
         return "Super Strong"
     if cagr >= 0.10 and pct_pnl >= 0:
@@ -736,10 +734,6 @@ def get_recommendation(pct_pnl: float, cagr: float, price_zero: bool) -> str:
         return "SELL"
 
 def suggest_horizon(strength: str, div_yield: float, cagr: float) -> str:
-    """
-    AI-style heuristic for how long to hold:
-    uses growth (CAGR) + dividend profile + strength bucket.
-    """
     if strength == "Super Strong":
         if div_yield >= 0.015 or cagr >= 0.18:
             return "Hold 20+ years (core compounding)"
@@ -756,7 +750,6 @@ def suggest_horizon(strength: str, div_yield: float, cagr: float) -> str:
         if cagr > 0:
             return "Tactical hold; reassess within 1–2 years"
         return "Exit gradually over 1–2 years"
-    # Super Weak
     return "Exit within 6–12 months; rotate to better compounders"
 
 def render_reco_cards(recs: List[Dict], label: str):
@@ -957,7 +950,7 @@ def main():
             proj_df = pd.DataFrame(proj_data)
             st.markdown(proj_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
 
-            # 🤖 AI Analysis – strength buckets (replaces adjust/recalc table)
+            # 🤖 AI Analysis – strength buckets
             st.markdown("### 🤖 AI Analysis – Strength Buckets for 20-Year Investing")
             st.write(
                 "Each stock is classified into **Super Strong, Strong, Medium, Weak, Super Weak** "
@@ -1007,13 +1000,16 @@ def main():
         dhan_store = localS.getItem("dhan_config") or {}
         if dhan_store:
             st.session_state['dhan_client_id'] = dhan_store.get("client_id", st.session_state['dhan_client_id'])
+
         dhan_enable = st.checkbox("Enable Dhan", value=st.session_state.get('dhan_enabled', False))
         st.session_state['dhan_enabled'] = dhan_enable
+
         if dhan_enable:
             dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''), key="dhan_client_main")
             dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password", key="dhan_token_main")
             st.session_state['dhan_client_id'] = dcid
             st.session_state['dhan_access_token'] = dtoken
+
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("🔑 Connect Dhan", use_container_width=True, key="btn_connect_dhan_main"):
@@ -1022,7 +1018,20 @@ def main():
             with c2:
                 if st.button("🚪 Logout Dhan", use_container_width=True, key="btn_logout_dhan_main"):
                     dhan_logout()
+
             st.caption(st.session_state['dhan_login_msg'])
+
+            # 🔳 Dhan configuration summary in black table
+            masked_token = "●" * 10 if dtoken else "Not set"
+            cfg_rows = [
+                {"Field": "Client ID", "Value": dcid or "Not set"},
+                {"Field": "Access Token", "Value": masked_token},
+                {"Field": "Status", "Value": st.session_state['dhan_login_msg']},
+            ]
+            cfg_df = pd.DataFrame(cfg_rows)
+            st.markdown("#### 🧩 Dhan Configuration")
+            st.markdown(cfg_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
+
             df_port, total_pnl = format_dhan_portfolio_table()
             if df_port is None or df_port.empty:
                 st.info("No Dhan holdings/positions fetched yet.")
@@ -1041,6 +1050,7 @@ def main():
 
     elif page == "⚙️ Configuration":
         st.markdown("### ⚙️ App Configuration")
+        # Only Telegram configuration (Nifty 200 universe section removed)
         with st.expander("📨 Telegram P&L Notifications", expanded=False):
             tg_store = localS.getItem("telegram_config") or {}
             if tg_store:
@@ -1056,6 +1066,7 @@ def main():
             tg_chat = st.text_input("Chat ID", value=st.session_state['telegram_chat_id'], key="cfg_tg_chat")
             st.session_state['telegram_bot_token'] = tg_token
             st.session_state['telegram_chat_id'] = tg_chat
+
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("💾 Save settings", use_container_width=True, key="btn_save_settings"):
@@ -1068,13 +1079,6 @@ def main():
                     tg_resp = send_telegram_message(text) if tg_token and tg_chat else {"info": "Telegram not configured"}
                     st.success("Triggered P&L send. Check Telegram.")
                     st.json({"telegram": tg_resp})
-        with st.expander("📂 Nifty 200 Universe", expanded=False):
-            if st.button("🔁 Regenerate NIFTY 200 CSV (internal)", use_container_width=True, key="btn_regen_nifty"):
-                ok = regenerate_nifty200_csv_from_master()
-                if ok:
-                    st.success("Regenerated data/nifty200_yahoo.csv inside app container.")
-                else:
-                    st.error("Failed to regenerate CSV. See error above.")
 
 if __name__ == "__main__":
     main()
