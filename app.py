@@ -1,7 +1,6 @@
-
-app.py
 # ========= AUTO-INSTALL (ONLY DHAN, OPTIONAL) =========
-import subprocess, sys
+import subprocess
+import sys
 
 def ensure_package(pkg_name: str):
     try:
