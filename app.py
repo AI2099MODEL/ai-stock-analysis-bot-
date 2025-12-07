@@ -1,5 +1,5 @@
-# Complete Stock Analysis Bot - ONLY GROWW & DHAN & CONFIG PAGES MODIFIED
-# All other pages remain exactly as original
+# Complete Stock Analysis Bot - GROWW + DHAN + CONFIG PAGES MODIFIED
+# All other logic preserved
 
 import subprocess, sys
 
@@ -122,7 +122,7 @@ st.markdown("""
         color: #e5f3ff !important;
     }
 
-    /* 🔳 Dark table for portfolio snapshot, projections, config */
+    /* 🔳 Dark table for portfolio snapshot, projections, and configs */
     .dark-table {
         width: 100%;
         border-collapse: collapse;
@@ -142,6 +142,19 @@ st.markdown("""
         background-color: #111827;
         font-weight: 600;
         text-align: left;
+    }
+
+    /* Make ALL Streamlit tables/dataframes dark-looking */
+    div[data-testid="stDataFrame"] table {
+        background-color: #020617 !important;
+        color: #f9fafb !important;
+    }
+    div[data-testid="stDataFrame"] th,
+    div[data-testid="stDataFrame"] td {
+        background-color: #020617 !important;
+        color: #f9fafb !important;
+        border-color: #1f2937 !important;
+        font-size: 0.85rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -708,10 +721,6 @@ def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
     return float(div_yield), float(div_rupees), float(cagr)
 
 def classify_strength(pct_pnl: float, cagr: float, price_zero: bool) -> str:
-    """
-    Strength buckets for Groww AI analysis:
-    Super Strong / Strong / Medium / Weak / Super Weak
-    """
     if price_zero:
         return "Super Strong"
     if cagr >= 0.15 and pct_pnl >= 20:
@@ -802,6 +811,8 @@ def main():
     st.info("On mobile you can view Top 20 stocks. For other views (BTST, Intraday, Weekly, Monthly, Groww, Dhan, Configuration), please open this dashboard on a laptop or desktop.", icon="📱")
     st.markdown("---")
     page = st.session_state['current_page']
+
+    # ----- Main pages -----
 
     if page == "🔥 Top Stocks":
         st.subheader("🔥 Top Stocks (up to 20)")
@@ -1005,8 +1016,26 @@ def main():
         st.session_state['dhan_enabled'] = dhan_enable
 
         if dhan_enable:
-            dcid = st.text_input("Client ID", value=st.session_state.get('dhan_client_id', ''), key="dhan_client_main")
-            dtoken = st.text_input("Access Token", value=st.session_state.get('dhan_access_token', ''), type="password", key="dhan_token_main")
+            # 🔳 Dhan configuration in black table (editable)
+            current_cid = st.session_state.get('dhan_client_id', '')
+            current_tok = st.session_state.get('dhan_access_token', '')
+
+            cfg_df_edit = pd.DataFrame({
+                "Field": ["Client ID", "Access Token"],
+                "Value": [current_cid, current_tok],
+            })
+            st.markdown("#### 🧩 Dhan Configuration (edit inside table)")
+            edited_cfg = st.data_editor(
+                cfg_df_edit,
+                hide_index=True,
+                num_rows="fixed",
+                use_container_width=True,
+                key="dhan_cfg_editor",
+            )
+
+            dcid = str(edited_cfg.loc[0, "Value"]) if "Value" in edited_cfg.columns else current_cid
+            dtoken = str(edited_cfg.loc[1, "Value"]) if len(edited_cfg) > 1 else current_tok
+
             st.session_state['dhan_client_id'] = dcid
             st.session_state['dhan_access_token'] = dtoken
 
@@ -1021,7 +1050,7 @@ def main():
 
             st.caption(st.session_state['dhan_login_msg'])
 
-            # 🔳 Dhan configuration summary in black table
+            # Summary dark table (read-only view)
             masked_token = "●" * 10 if dtoken else "Not set"
             cfg_rows = [
                 {"Field": "Client ID", "Value": dcid or "Not set"},
@@ -1029,7 +1058,6 @@ def main():
                 {"Field": "Status", "Value": st.session_state['dhan_login_msg']},
             ]
             cfg_df = pd.DataFrame(cfg_rows)
-            st.markdown("#### 🧩 Dhan Configuration")
             st.markdown(cfg_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
 
             df_port, total_pnl = format_dhan_portfolio_table()
@@ -1050,22 +1078,52 @@ def main():
 
     elif page == "⚙️ Configuration":
         st.markdown("### ⚙️ App Configuration")
-        # Only Telegram configuration (Nifty 200 universe section removed)
+
+        # Only Telegram configuration, in black table-editor style
         with st.expander("📨 Telegram P&L Notifications", expanded=False):
             tg_store = localS.getItem("telegram_config") or {}
             if tg_store:
                 st.session_state['telegram_bot_token'] = tg_store.get("bot_token", st.session_state['telegram_bot_token'])
                 st.session_state['telegram_chat_id'] = tg_store.get("chat_id", st.session_state['telegram_chat_id'])
+
             notify_toggle = st.checkbox(
                 "Enable P&L notifications (30 min) & auto recommendations",
                 value=st.session_state['notify_enabled'],
                 key="cfg_notify_toggle",
             )
             st.session_state['notify_enabled'] = notify_toggle
-            tg_token = st.text_input("Bot Token", value=st.session_state['telegram_bot_token'], key="cfg_tg_token")
-            tg_chat = st.text_input("Chat ID", value=st.session_state['telegram_chat_id'], key="cfg_tg_chat")
+
+            cur_tok = st.session_state['telegram_bot_token']
+            cur_chat = st.session_state['telegram_chat_id']
+
+            tg_df_edit = pd.DataFrame({
+                "Field": ["Bot Token", "Chat ID"],
+                "Value": [cur_tok, cur_chat],
+            })
+
+            st.markdown("#### 🧩 Telegram Configuration (edit inside table)")
+            edited_tg = st.data_editor(
+                tg_df_edit,
+                hide_index=True,
+                num_rows="fixed",
+                use_container_width=True,
+                key="tg_cfg_editor",
+            )
+
+            tg_token = str(edited_tg.loc[0, "Value"]) if "Value" in edited_tg.columns else cur_tok
+            tg_chat = str(edited_tg.loc[1, "Value"]) if len(edited_tg) > 1 else cur_chat
+
             st.session_state['telegram_bot_token'] = tg_token
             st.session_state['telegram_chat_id'] = tg_chat
+
+            # Summary dark table for Telegram config
+            tg_rows = [
+                {"Field": "Bot Token", "Value": tg_token or "Not set"},
+                {"Field": "Chat ID", "Value": tg_chat or "Not set"},
+                {"Field": "Notifications", "Value": "Enabled" if notify_toggle else "Disabled"},
+            ]
+            tg_df = pd.DataFrame(tg_rows)
+            st.markdown(tg_df.to_html(classes="dark-table", index=False, escape=False), unsafe_allow_html=True)
 
             c1, c2 = st.columns(2)
             with c1:
