@@ -1,3 +1,5 @@
+
+app.py
 # ========= AUTO-INSTALL (ONLY DHAN, OPTIONAL) =========
 import subprocess, sys
 
@@ -25,6 +27,7 @@ import requests
 import os
 import json
 from pathlib import Path
+from difflib import SequenceMatcher
 
 from streamlit_local_storage import LocalStorage  # browser localStorage helper
 
@@ -80,18 +83,22 @@ st.set_page_config(
 st.markdown("""
 <style>
     :root {
-        --bg-main: #f3f4f6;          /* light gray */
-        --bg-header-from: #4f46e5;   /* indigo-600 */
-        --bg-header-to: #0ea5e9;     /* sky-500 */
-        --bg-card: #ffffff;          /* white card */
-        --border-card: #1e293b;      /* slate-800 */
+        --bg-main: #f3f4f6;
+        --bg-header-from: #4f46e5;
+        --bg-header-to: #0ea5e9;
+        --bg-card: #ffffff;
+        --border-card: #1e293b;
         --accent: #ffffff;
-        --accent-soft: #bbf7d0;      /* green-100 */
-        --nav-bg: #e5e7eb;           /* gray-200 */
-        --nav-bg-hover: #4f46e5;     /* indigo-600 */
-        --nav-bg-active: #4338ca;    /* indigo-700 */
-        --nav-text: #111827;         /* gray-900 */
-        --nav-text-active: #0f172a;  /* dark slate */
+        --accent-soft: #bbf7d0;
+        --nav-bg: #e5e7eb;
+        --nav-bg-hover: #4f46e5;
+        --nav-bg-active: #4338ca;
+        --nav-text: #111827;
+        --nav-text-active: #0f172a;
+        --btn-primary: #4f46e5;
+        --btn-primary-hover: #4338ca;
+        --btn-secondary: #f97316;
+        --btn-secondary-hover: #ea580c;
     }
 
     .stApp {
@@ -179,32 +186,71 @@ st.markdown("""
         overflow: hidden;
     }
 
-    /* Refresh button (key='refresh_btn') */
-    div.stButton[data-baseweb="button"] button[kind="secondary"] {
-        font-weight: 500;
-    }
-
-    .st-key-refresh_btn button {
-        background-color: #f97316 !important;  /* orange */
+    /* PRIMARY BUTTONS (Run Full Scan) */
+    div[data-testid="stButton"] button[kind="primary"] {
+        background-color: var(--btn-primary) !important;
         color: #ffffff !important;
-        border-color: #ea580c !important;
-    }
-    .st-key-refresh_btn button:hover {
-        background-color: #ea580c !important;
+        border: 2px solid var(--btn-primary) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
     }
 
-    /* File uploader "Browse files" styling */
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+        background-color: var(--btn-primary-hover) !important;
+        border-color: var(--btn-primary-hover) !important;
+        box-shadow: 0 6px 16px rgba(67, 56, 202, 0.4) !important;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"]:active {
+        background-color: #3730a3 !important;
+        transform: scale(0.98);
+    }
+
+    /* SECONDARY/REFRESH BUTTONS (key='refresh_btn') */
+    .st-key-refresh_btn button {
+        background-color: var(--btn-secondary) !important;
+        color: #ffffff !important;
+        border: 2px solid var(--btn-secondary) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3) !important;
+    }
+
+    .st-key-refresh_btn button:hover {
+        background-color: var(--btn-secondary-hover) !important;
+        border-color: var(--btn-secondary-hover) !important;
+        box-shadow: 0 6px 16px rgba(234, 88, 12, 0.4) !important;
+    }
+
+    .st-key-refresh_btn button:active {
+        background-color: #c2410c !important;
+        transform: scale(0.98);
+    }
+
+    /* ALL OTHER BUTTONS (secondary style - colored) */
+    div[data-testid="stButton"] button[kind="secondary"] {
+        background-color: #e5e7eb !important;
+        color: #1f2937 !important;
+        border: 1px solid #d1d5db !important;
+        font-weight: 500 !important;
+    }
+
+    div[data-testid="stButton"] button[kind="secondary"]:hover {
+        background-color: #d1d5db !important;
+        border-color: #9ca3af !important;
+    }
+
+    /* File uploader styling */
     div[data-testid="stFileUploader"] > label div[data-testid="stFileUploadDropzone"] {
-        border: 1px solid #4f46e5;
-        background-color: #eef2ff;
-        color: #1e293b;
+        border: 2px dashed var(--btn-primary) !important;
+        background-color: #eef2ff !important;
+        color: #1e293b !important;
     }
     div[data-testid="stFileUploader"] > label div[data-testid="stFileUploadDropzone"]:hover {
-        border-color: #4338ca;
-        background-color: #e0e7ff;
+        border-color: var(--btn-primary-hover) !important;
+        background-color: #e0e7ff !important;
     }
 </style>
-""", unsafe_allow_html=True)  # file uploader & other styling [web:41][web:49]
+""", unsafe_allow_html=True)
 
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -282,7 +328,7 @@ def regenerate_nifty200_csv_from_master():
     df_out["YF_TICKER"] = df_out["SYMBOL"].apply(lambda s: f"{s}.NS")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     df_out.to_csv(NIFTY200_CSV, index=False)
-    load_nifty200_universe.clear()
+    load_nifty200_universe.clear_cache()
     global STOCK_UNIVERSE, NIFTY_YF_MAP
     STOCK_UNIVERSE, NIFTY_YF_MAP = load_nifty200_universe()
     return True
@@ -662,65 +708,130 @@ def get_top_stocks(limit: int = 10):
         return []
     return pd.DataFrame(unique_rows).to_dict(orient="records")
 
-# ========= GRADED GROWW ANALYSIS & FUNDAMENTALS =========
+# ========= GROWW ANALYSIS & FUNDAMENTALS =========
 def load_groww_file(uploaded_file):
+    """
+    Load Groww portfolio from CSV, XLS, or XLSX.
+    Handles multiple sheets and automatic header detection.
+    """
     name = uploaded_file.name.lower()
     try:
         if name.endswith(".csv"):
+            # Try different delimiters
             df = pd.read_csv(uploaded_file, sep=None, engine="python")
         elif name.endswith((".xls", ".xlsx")):
-            df = pd.read_excel(uploaded_file)  # xls/xlsx via pandas engines [web:41]
+            # Read Excel - try to auto-detect the correct sheet
+            excel_file = pd.ExcelFile(uploaded_file)
+            st.info(f"📄 Sheets found: {excel_file.sheet_names}")
+            
+            # Try common sheet names first
+            sheet_name = None
+            for candidate in ["Sheet1", "Portfolio", "Holdings", "Groww", "Data"]:
+                if candidate in excel_file.sheet_names:
+                    sheet_name = candidate
+                    break
+            
+            # If no common name found, use first sheet
+            if sheet_name is None:
+                sheet_name = excel_file.sheet_names[0]
+            
+            st.info(f"📋 Using sheet: '{sheet_name}'")
+            
+            # Read with header on first non-empty row
+            df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=0)
+            
+            # Clean up: remove completely empty rows
+            df = df.dropna(how='all')
+            
         else:
             st.error("Only CSV, XLS, or XLSX files are supported.")
             return pd.DataFrame()
+        
+        # Display actual columns found
+        st.info(f"✓ Columns detected: {list(df.columns)}")
+        st.write(f"📊 Total rows: {len(df)}")
+        
         return df
+        
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        st.error(f"❌ Error reading file: {e}")
+        st.write("Try these steps:")
+        st.write("1. Ensure the file has headers in the first row")
+        st.write("2. Check that column names match exactly (case-sensitive)")
+        st.write("3. Ensure no special characters in column headers")
         return pd.DataFrame()
 
-def map_groww_columns(df: pd.DataFrame):
+
+def map_groww_columns_fuzzy(df: pd.DataFrame):
     """
-    Expected headers (exact text in your file):
-    Stock Name | ISIN | Quantity | Average buy price per share | Total Investment | Total CMP | TOTAL P&L
-    Matching is case- and space-insensitive to avoid small formatting issues.
+    Improved column mapping with fuzzy matching.
+    Works with slight variations in column names.
     """
-    # Normalize incoming column names (lower + strip) for matching [web:48][web:50]
+    def similarity(a, b):
+        return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    
+    # Normalize incoming column names
     norm_cols = {c.lower().strip(): c for c in df.columns}
-
-    # Logical keys -> normalized header text
-    required_map = {
-        "stock name": "stock name",
-        "isin": "isin",
-        "quantity": "quantity",
-        "average buy price per share": "average buy price per share",
-        "total investment": "total investment",
-        "total cmp": "total cmp",
-        "total p&l": "total p&l",   # from "TOTAL P&L"
+    
+    # Define expected columns with fuzzy matching
+    expected = {
+        "stock name": ["stock name", "stock", "symbol name", "company name"],
+        "isin": ["isin", "isin code"],
+        "quantity": ["quantity", "qty", "units", "shares"],
+        "average buy price per share": ["average buy price per share", "avg buy price", "average cost", "buy price", "cost per share"],
+        "total investment": ["total investment", "investment", "total cost", "cost amount"],
+        "total cmp": ["total cmp", "current value", "market value", "total value", "cmp"],
+        "total p&l": ["total p&l", "p&l", "profit loss", "pnl", "gain loss"],
     }
-
+    
     out = {}
     missing = []
-    for logical_key, norm_header in required_map.items():
-        if norm_header in norm_cols:
-            out[logical_key] = norm_cols[norm_header]  # actual column name in df
+    
+    for logical_key, aliases in expected.items():
+        best_match = None
+        best_score = 0.6  # Minimum similarity threshold
+        
+        for alias in aliases:
+            for norm_header in norm_cols.keys():
+                score = similarity(alias, norm_header)
+                if score > best_score:
+                    best_score = score
+                    best_match = norm_cols[norm_header]
+        
+        if best_match:
+            out[logical_key] = best_match
+            st.write(f"✓ Matched '{logical_key}' → '{best_match}' (score: {best_score:.2f})")
         else:
             missing.append(logical_key)
-
+            st.warning(f"⚠ Could not match '{logical_key}'")
+    
     if missing:
         msg = (
-            "Columns must match this Groww template exactly: "
-            "'Stock Name, ISIN, Quantity, Average buy price per share, "
-            "Total Investment, Total CMP, TOTAL P&L'. "
-            "Missing or mismatched: " + ", ".join(missing)
+            f"Missing critical columns: {', '.join(missing)}. "
+            f"Expected columns:\n"
+            f"- Stock Name\n"
+            f"- ISIN\n"
+            f"- Quantity\n"
+            f"- Average Buy Price Per Share\n"
+            f"- Total Investment\n"
+            f"- Total CMP\n"
+            f"- Total P&L"
         )
         return None, msg
-
+    
     return out, None
 
-def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
+
+def fetch_dividend_and_cagr_v2(stock_name: str, isin: str, cmp_value: float):
+    """
+    Enhanced version with better error handling and logging.
+    """
     sym = ""
     if stock_name:
-        sym = stock_name.split()[0].upper().strip()
+        # Extract ticker from stock name (first word or before space)
+        parts = str(stock_name).split()
+        sym = parts[0].upper().strip()
+    
     yf_ticker = NIFTY_YF_MAP.get(sym, None)
     if not yf_ticker and sym:
         yf_ticker = f"{sym}.NS"
@@ -734,25 +845,37 @@ def fetch_dividend_and_cagr(stock_name: str, isin: str, cmp_value: float):
 
     try:
         t = yf.Ticker(yf_ticker)
-        info = t.info or {}
-        raw_yield = info.get("dividendYield")
-        if raw_yield is not None:
-            div_yield = float(raw_yield)
-        if cmp_value and div_yield:
-            div_rupees = div_yield * cmp_value
+        
+        # Attempt to get dividend yield
+        try:
+            info = t.info or {}
+            raw_yield = info.get("dividendYield")
+            if raw_yield is not None:
+                div_yield = float(raw_yield)
+            if cmp_value and div_yield:
+                div_rupees = div_yield * cmp_value
+        except Exception:
+            pass  # Use defaults if dividend fetch fails
 
-        hist = t.history(period="10y")
-        if hist is not None and not hist.empty:
-            hist = hist.dropna(subset=["Close"])
-            first_price = float(hist["Close"].iloc[0])
-            last_price = float(hist["Close"].iloc[-1])
-            years = max((hist.index[-1] - hist.index[0]).days / 365.0, 1.0)
-            if first_price > 0 and years > 0:
-                cagr = (last_price / first_price) ** (1.0 / years) - 1.0  # CAGR [web:21]
-    except Exception:
-        pass
+        # Attempt to get CAGR from 10-year history
+        try:
+            hist = t.history(period="10y")
+            if hist is not None and not hist.empty:
+                hist = hist.dropna(subset=["Close"])
+                if len(hist) > 1:
+                    first_price = float(hist["Close"].iloc[0])
+                    last_price = float(hist["Close"].iloc[-1])
+                    years = max((hist.index[-1] - hist.index[0]).days / 365.0, 1.0)
+                    if first_price > 0 and years > 0:
+                        cagr = (last_price / first_price) ** (1.0 / years) - 1.0
+        except Exception:
+            pass  # Use default if history fetch fails
+
+    except Exception as e:
+        st.warning(f"Could not fetch data for {stock_name} ({yf_ticker}): {str(e)[:50]}")
 
     return float(div_yield), float(div_rupees), float(cagr)
+
 
 def classify_strength(pct_pnl: float, cagr: float, price_zero: bool) -> str:
     if price_zero:
@@ -914,7 +1037,7 @@ def main():
             if df_up.empty:
                 st.stop()
 
-            cols, err = map_groww_columns(df_up)
+            cols, err = map_groww_columns_fuzzy(df_up)
             if err:
                 st.error(err)
                 st.dataframe(df_up.head(), use_container_width=True, hide_index=True)
@@ -955,7 +1078,7 @@ def main():
                 cmp_ps = float(row["_cmp_per_share"])
                 is_zero_price = cmp_ps <= 0.0
 
-                div_y, div_r, cagr = fetch_dividend_and_cagr(stock_name, str(row[isin_col]), cmp_ps)
+                div_y, div_r, cagr = fetch_dividend_and_cagr_v2(stock_name, str(row[isin_col]), cmp_ps)
                 div_yields.append(div_y)
                 div_rupees_list.append(div_r)
                 cagr_list.append(cagr)
