@@ -612,6 +612,12 @@ def get_recommendation(pct_pnl: float, cagr: float, price_zero: bool) -> str:
     else:
         return "SELL"
 
+def fmt_lakhs(x: float) -> str:
+    try:
+        return f"₹{x/1e5:.2f} L"
+    except Exception:
+        return "₹0.00 L"
+
 def project_value(current_value: float, cagr: float, yearly_dividend: float, years: int) -> float:
     future = current_value * ((1 + cagr) ** years)
     future += yearly_dividend * years
@@ -766,7 +772,13 @@ def main():
             for y in years_list:
                 v = project_value(total_cmp_val, portfolio_cagr, total_yearly_div, y)
                 capital_gain = v - total_cmp_val - (total_yearly_div * y)
-                proj_data.append({"Years": y, "Current Value (₹)": f"₹{total_cmp_val:,.2f}", "Total Dividends (₹)": f"₹{total_yearly_div * y:,.2f}", "Capital Gain (₹)": f"₹{capital_gain:,.2f}", "Projected Value (₹)": f"₹{v:,.2f}"})
+                proj_data.append({
+                    "Years": y,
+                    "Current Value (₹)": fmt_lakhs(total_cmp_val),
+                    "Total Dividends (₹)": fmt_lakhs(total_yearly_div * y),
+                    "Capital Gain (₹)": fmt_lakhs(capital_gain),
+                    "Projected Value (₹)": fmt_lakhs(v)
+                })
             st.table(pd.DataFrame(proj_data))
             st.markdown("### 🛠 Adjust Portfolio & Recalculate")
             st.write("Adjust quantities, CMP, CAGR, and dividend per share, then click **Auto Calculate**.")
@@ -818,7 +830,13 @@ def main():
                 for y in years_list:
                     v2 = project_value(total_cmp_val2, portfolio_cagr2, total_yearly_div2, y)
                     capital_gain2 = v2 - total_cmp_val2 - (total_yearly_div2 * y)
-                    proj2.append({"Years": y, "Current Value (₹)": f"₹{total_cmp_val2:,.2f}", "Total Dividends (₹)": f"₹{total_yearly_div2 * y:,.2f}", "Capital Gain (₹)": f"₹{capital_gain2:,.2f}", "Projected Value (₹)": f"₹{v2:,.2f}"})
+                    proj2.append({
+                        "Years": y,
+                        "Current Value (₹)": fmt_lakhs(total_cmp_val2),
+                        "Total Dividends (₹)": fmt_lakhs(total_yearly_div2 * y),
+                        "Capital Gain (₹)": fmt_lakhs(capital_gain2),
+                        "Projected Value (₹)": fmt_lakhs(v2)
+                    })
                 st.table(pd.DataFrame(proj2))
                 st.markdown("#### 📋 Detailed Results with Recommendations (₹ INR)")
                 show_cols = [cols["stock name"], cols["quantity"], cols["total investment"], cols["total cmp"], "_pnl", "Dividend/Share (₹)", "Yearly Dividend (₹)", "CAGR (%)", "Strength", "Recommendation"]
