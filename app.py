@@ -1137,6 +1137,6 @@ def main():
                     tg_resp = send_telegram_message(text) if tg_token and tg_chat else {"info": "Telegram not configured"}
                     st.success("Triggered P&L send. Check Telegram.")
                     st.json({"telegram": tg_resp})
-    if __name__ == "__main__":
-    main()
 
+if __name__ == "__main__":
+    main()
