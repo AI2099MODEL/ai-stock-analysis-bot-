@@ -966,14 +966,13 @@ def main():
             )
             reco_cols = [
                 cols["stock name"],
-                "_inv",
+                "Strength",
+                "Recommendation",
+                "Suggested Horizon","_inv",
                 "_cmp_total",
                 "_pnl",
                 "Dividend Yield",
                 "CAGR (%)",
-                "Strength",
-                "Recommendation",
-                "Suggested Horizon",
             ]
             df_reco = df[reco_cols].rename(columns={
                 cols["stock name"]: "Stock Name",
