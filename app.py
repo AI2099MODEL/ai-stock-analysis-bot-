@@ -7,7 +7,7 @@ def ensure_package(pkg_name: str):
     try:
         __import__(pkg_name)
     except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "-m" if False else "-m", "pip", "install", pkg_name])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg_name])
 
 try:
     ensure_package("dhanhq")
@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import ta
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional
 import pytz
 import requests
@@ -65,8 +65,9 @@ st.set_page_config(page_title="🤖 AI Stock Analysis Bot", page_icon="📈", la
 
 st.markdown("""
 <style>
-    .stApp { background-color: #f3f4f6; color: #111827; }
-    body { background-color: #f3f4f6; color: #111827; }
+    .stApp { background-color: #fafafa; color: #111827; }
+    body { background-color: #fafafa; color: #111827; }
+
     .main-header {
         background: linear-gradient(120deg, #4f46e5 0%, #0ea5e9 100%);
         padding: 18px; border-radius: 18px; color: white; margin-bottom: 12px;
@@ -850,6 +851,8 @@ def analyze_dhan_portfolio_recommendations():
     Fetch Dhan holdings and produce per-stock recommendations using AI heuristics:
     - uses YF history to compute ATR-based targets
     - compares CMP to target_1 and target_2 to output Buy/Hold/Sell and distance info
+    - shows CMP, present P&L for that stock, upcoming dividend date & amount (if available),
+      and labels recommendation with suggested timeframe (BTST/Intraday/Weekly/Monthly) from scanner
     """
     df_port, total_pnl = format_dhan_portfolio_table()
     if df_port is None or df_port.empty:
@@ -857,55 +860,47 @@ def analyze_dhan_portfolio_recommendations():
         return
 
     st.markdown("### 🧾 Dhan Stocks — AI Recommendations")
-    st.markdown("For each stock below: recommendation (Buy/Hold/Sell), target price, and how far CMP is from recommended price.")
+    st.markdown("For each stock below: recommendation (Buy/Hold/Sell), target price, how far CMP is from recommended price, present P&L, and upcoming dividend (if any).")
     st.write("")  # spacing
 
     # iterate rows
     for _, row in df_port.iterrows():
         stock_name = str(row.get("Stock", "")).strip()
+        # CMP, P&L and quantities from portfolio table
         cmp_val = float(row.get("CMP", 0.0)) if not pd.isna(row.get("CMP", np.nan)) else np.nan
-        qty = float(row.get("Quantity", 0.0)) if not pd.isna(row.get("Quantity", 0.0)) else 0.0
+        qty = float(row.get("Quantity", 0.0)) if not pd.isna(row.get("Quantity", np.nan)) else 0.0
+        total_cost = float(row.get("Total Cost", 0.0)) if not pd.isna(row.get("Total Cost", np.nan)) else 0.0
+        total_value = float(row.get("Total Value", 0.0)) if not pd.isna(row.get("Total Value", np.nan)) else 0.0
+        pnl = float(row.get("P&L", 0.0)) if not pd.isna(row.get("P&L", np.nan)) else 0.0
+        pct_pnl = (pnl / total_cost * 100.0) if total_cost else 0.0
 
         # Try to map to yahoo ticker
-        try:
-            yf_sym = nse_yf_symbol(stock_name)
-        except Exception:
-            yf_sym = f"{stock_name}.NS"
-
-        # Fetch recent history for targets
+        yf_sym = nse_yf_symbol(stock_name)
+        # Fetch recent history for targets & info
         targets = {}
+        info = {}
         try:
             t = yf.Ticker(yf_sym)
+            info = t.info or {}
             hist = t.history(period="90d", interval="1d", auto_adjust=True)
             if hist is not None and not hist.empty:
                 hist = hist.dropna(subset=["Close"])
-                # Reset index to match helper expectations
                 hist = hist.reset_index()
-                # Ensure columns Capitalized like other code expects
                 hist.columns = [str(c).capitalize() for c in hist.columns]
-                # Compute ATR-based targets using TechnicalAnalysis helper
                 if len(hist['Close']) >= 14:
                     targets = TechnicalAnalysis.calculate_targets(hist, float(hist['Close'].iloc[-1]))
         except Exception:
             targets = {}
+            info = {}
 
         target_1 = targets.get('target_1', None)
         target_2 = targets.get('target_2', None)
         target_3 = targets.get('target_3', None)
 
         # Determine recommendation rules:
-        # If no targets available -> fallback to P&L-based recommendation
         if target_1 is None or np.isnan(cmp_val) or cmp_val == 0:
             # fallback using P&L and heuristic
-            pnl_pct = 0.0
-            try:
-                total_cost = float(row.get("Total Cost", 0.0))
-                total_value = float(row.get("Total Value", 0.0))
-                pnl_pct = ((total_value - total_cost) / total_cost * 100.0) if total_cost > 0 else 0.0
-            except Exception:
-                pnl_pct = 0.0
-            # use existing helper get_recommendation with rough cagr default
-            rec = get_recommendation(pnl_pct, 0.05, cmp_val <= 0 if not pd.isna(cmp_val) else True)
+            rec = get_recommendation(pct_pnl, 0.05, cmp_val <= 0 if not pd.isna(cmp_val) else True)
             distance_text = "Target not available"
             tgt_display = "—"
         else:
@@ -921,24 +916,105 @@ def analyze_dhan_portfolio_recommendations():
                 distance_text = f"CMP is {distance_pct:.2f}% above the primary target (consider HOLD)"
             else:
                 rec = "SELL"
-                # how far above target_2 or target_1
                 ref = target_2 if (target_2 is not None) else target_1
                 distance_pct = (cmp_val - ref) / ref * 100 if ref else np.nan
                 distance_text = f"CMP is higher by {distance_pct:.2f}% — CMP is still higher than recommended price"
 
+        # Get upcoming dividend info if available from info dict
+        upcoming_div_date = None
+        upcoming_div_amount = None
+        try:
+            # yfinance 'dividendDate' is epoch int if available
+            div_epoch = info.get("dividendDate") or info.get("lastDividendDate")
+            if div_epoch:
+                # some providers return epoch in seconds
+                try:
+                    dv = datetime.fromtimestamp(int(div_epoch)).date()
+                except Exception:
+                    # maybe it's already a date-like string
+                    dv = None
+                upcoming_div_date = dv
+
+            # amount could be lastDividendValue or dividendRate or trailing annual dividend
+            div_amt = info.get("lastDividendValue") or info.get("dividendRate") or info.get("trailingAnnualDividendRate")
+            if div_amt:
+                upcoming_div_amount = float(div_amt)
+        except Exception:
+            upcoming_div_date = None
+            upcoming_div_amount = None
+
+        # If we have only dividend yield, estimate amount = yield * CMP
+        if upcoming_div_amount is None and info:
+            try:
+                dy = info.get("dividendYield")
+                if dy and not np.isnan(dy) and not pd.isna(cmp_val):
+                    upcoming_div_amount = float(dy) * float(cmp_val)
+            except Exception:
+                pass
+
+        # Multiply per-share dividend by quantity to get expected payout
+        total_upcoming_div_payout = None
+        if upcoming_div_amount is not None and qty:
+            try:
+                total_upcoming_div_payout = upcoming_div_amount * qty
+            except Exception:
+                total_upcoming_div_payout = None
+
+        # Determine suggested timeframe label using analyzer: run analyze_stock for each period and pick best score
+        best_period = None
+        best_score = -1
+        best_summary = None
+        try:
+            for p in ['BTST', 'Intraday', 'Weekly', 'Monthly']:
+                res = analyze_stock(stock_name, p)
+                if res and res.get("score", 0) > best_score:
+                    best_score = res.get("score", 0)
+                    best_period = p
+                    best_summary = res
+        except Exception:
+            best_period = None
+            best_summary = None
+
+        timeframe_label = best_period if best_period else "N/A"
+
         # Render card for this stock
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown(f"<h3>{stock_name} • {rec}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3>{stock_name} • {rec} • {timeframe_label}</h3>", unsafe_allow_html=True)
         st.markdown(f"<div class='value'>💰 CMP: ₹{cmp_val:.2f}  | 🎯 Primary Target: {tgt_display}</div>", unsafe_allow_html=True)
+
         details = "<div class='chip-row'>"
         details += f"<span class='chip'>Qty: {int(qty) if qty==int(qty) else qty}</span>"
+        details += f"<span class='chip'>P&L: ₹{pnl:,.2f} ({pct_pnl:.2f}%)</span>"
         if target_2:
             details += f"<span class='chip'>Target2: ₹{float(target_2):.2f}</span>"
         if target_3:
             details += f"<span class='chip'>Target3: ₹{float(target_3):.2f}</span>"
         details += "</div>"
         st.markdown(details, unsafe_allow_html=True)
+
+        # Dividend display
+        div_lines = ""
+        if upcoming_div_date and upcoming_div_amount:
+            div_lines = f"📅 Upcoming ex/div date: {upcoming_div_date.isoformat()} • Per-share: ₹{upcoming_div_amount:.2f}"
+            if total_upcoming_div_payout is not None:
+                div_lines += f" • Expected payout: ₹{total_upcoming_div_payout:,.2f} (for {int(qty)} shares)"
+        elif upcoming_div_amount and not upcoming_div_date:
+            div_lines = f"💸 Last/Est. dividend per share: ₹{upcoming_div_amount:.2f}"
+            if total_upcoming_div_payout is not None:
+                div_lines += f" • Expected payout: ₹{total_upcoming_div_payout:,.2f}"
+        else:
+            div_lines = "📭 No upcoming dividend info found."
+
         st.markdown(f"<div class='sub'>🔎 {distance_text}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sub'>{div_lines}</div>", unsafe_allow_html=True)
+
+        # If analyzer summary exists, show short reason snippet
+        if best_summary:
+            reason = best_summary.get("reasons", "")
+            score = best_summary.get("score", 0)
+            strength = best_summary.get("signal_strength", "")
+            st.markdown(f"<div class='sub'>🧠 {timeframe_label} scanner: {strength} • Score: {score} • {reason}</div>", unsafe_allow_html=True)
+
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- END helper for Dhan stock analysis ----------
@@ -1156,46 +1232,6 @@ def suggest_horizon(strength: str, div_yield: float, cagr: float) -> str:
             return "Tactical hold; reassess within 1–2 years"
         return "Exit gradually over 1–2 years"
     return "Exit within 6–12 months; rotate to better compounders"
-
-def render_reco_cards(recs: List[Dict], label: str):
-    if not recs:
-        st.info(f"Tap 🚀 Run Full Scan to generate {label} ideas.")
-        return
-    df = pd.DataFrame(recs).sort_values("score", ascending=False).head(20 if label == "Top" else 10)
-    for _, rec in df.iterrows():
-        cmp_ = rec.get('price', 0.0)
-        tgt = rec.get('target_1', np.nan)
-        # safe formatting for target (avoid attempting {:.2f} on NaN)
-        if tgt is None or (isinstance(tgt, float) and np.isnan(tgt)):
-            tgt_display = "—"
-            diff = np.nan
-            profit_pct = np.nan
-        else:
-            try:
-                tgt_val = float(tgt)
-                tgt_display = f"{tgt_val:.2f}"
-                diff = tgt_val - cmp_
-                profit_pct = (diff / cmp_ * 100) if cmp_ else np.nan
-            except Exception:
-                tgt_display = str(tgt)
-                diff = np.nan
-                profit_pct = np.nan
-
-        reason = rec.get('reasons', '')
-        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown(f"<h3>{rec.get('ticker','')} • {rec.get('signal_strength','')} ⚡</h3>", unsafe_allow_html=True)
-        st.markdown(f"<div class='value'>💰 CMP: ₹{cmp_:.2f}  | 🎯 Target: ₹{tgt_display}</div>", unsafe_allow_html=True)
-        chip_html = "<div class='chip-row'>"
-        chip_html += f"<span class='chip'>⭐ Score: {int(rec.get('score',0))}</span>"
-        chip_html += f"<span class='chip'>⏱ {rec.get('timeframe','')}</span>"
-        chip_html += f"<span class='chip'>📊 {rec.get('period',label)}</span>"
-        chip_html += "</div>"
-        st.markdown(chip_html, unsafe_allow_html=True)
-        if not np.isnan(diff):
-            st.markdown(f"<div class='sub'>📈 Target Profit: ₹{diff:.2f} • 💹 Profit %: {profit_pct:.2f}%</div>", unsafe_allow_html=True)
-        if reason:
-            st.markdown(f"<div class='sub'>🧠 Reason: {reason}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
 
 def main():
     st.markdown(
